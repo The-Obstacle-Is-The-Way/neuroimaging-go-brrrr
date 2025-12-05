@@ -4,37 +4,92 @@
 > **Date**: 2024-12-05
 > **Contributors**: Open to all
 
-## Overview
+## The Problem
 
-This document outlines how multiple related neuroimaging repositories could be consolidated under `neuroimaging-go-brrrr` to reduce fragmentation and enable better collaboration within the HuggingFace Science community.
+**HuggingFace has been slow to integrate neuroimaging and BIDS support.** The `datasets` library has excellent support for text, images, and audio, but scientific imaging formats (NIfTI, DICOM, BIDS) have lagged behind.
 
-## Current Ecosystem
+The Hugging Science community is working together to accelerate this. This document outlines how we can consolidate our efforts under `neuroimaging-go-brrrr` to reduce fragmentation and ship faster.
 
+## Current State of HuggingFace Neuroimaging Support
+
+### What's Already Merged (thanks to community contributions)
+
+| PR | Title | Status | Date |
+|----|-------|--------|------|
+| [#7815](https://github.com/huggingface/datasets/pull/7815) | Add Nifti support | MERGED | Oct 24, 2025 |
+| [#7853](https://github.com/huggingface/datasets/pull/7853) | Fix embed storage nifti | MERGED | Nov 6, 2025 |
+| [#7874](https://github.com/huggingface/datasets/pull/7874) | Nifti visualization support | MERGED | Nov 19, 2025 |
+| [#7878](https://github.com/huggingface/datasets/pull/7878) | Replace papaya with NiiVue | MERGED | Nov 21, 2025 |
+
+### What's Still Pending (needs community push)
+
+| PR | Title | Status | Author |
+|----|-------|--------|--------|
+| [#7886](https://github.com/huggingface/datasets/pull/7886) | **BIDS dataset loader** | OPEN | Community |
+| [#7892](https://github.com/huggingface/datasets/pull/7892) | Encode nifti correctly when uploading lazily | OPEN | @CloseChoice |
+| [#7885](https://github.com/huggingface/datasets/pull/7885) | Add visualization paragraph to nifti readme | OPEN | @CloseChoice |
+| [#7835](https://github.com/huggingface/datasets/pull/7835) | Add DICOM support | DRAFT | @CloseChoice |
+
+## The Two Pipelines
+
+We've been building two complementary pipelines:
+
+```text
+┌─────────────────────────────────────────────────────────────────────────┐
+│                        PRODUCTION PIPELINE                               │
+│                        (Upload TO HuggingFace)                           │
+│                                                                          │
+│   OpenNeuro BIDS ──► Validate ──► Convert ──► push_to_hub() ──► HF Hub  │
+│                                                                          │
+│   Repos: arc-aphasia-bids, stroke-deepisles-demo                        │
+└─────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+                         ┌───────────────────┐
+                         │   HuggingFace Hub │
+                         │   (Nifti datasets)│
+                         └───────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                       CONSUMPTION PIPELINE                               │
+│                       (Load FROM HuggingFace)                            │
+│                                                                          │
+│   load_dataset('bids') ──► Stream ──► Decode Nifti ──► NiiVue viz       │
+│                                                                          │
+│   PRs: #7886 (BIDS loader), #7815 (Nifti), #7874 (visualization)        │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
+
+## Ecosystem Overview
+
+```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                     neuroimaging-go-brrrr                                │
 │                     ═══════════════════════                              │
 │                     CONSOLIDATION HUB                                    │
 │                                                                          │
+│  Purpose: Coordinate community efforts to accelerate HF neuroimaging    │
+│                                                                          │
 │  Current contents:                                                       │
-│  ├── scripts/push_to_hub_ds004884_full.py  ← Uses native BIDS loader    │
-│  ├── tools/bids-neuroimaging/              ← HF Space visualization     │
-│  └── README.md                             ← Links to resources         │
+│  ├── scripts/push_to_hub_ds004884_full.py                               │
+│  ├── tools/bids-neuroimaging/  (HF Space visualization)                 │
+│  └── README.md                 (resource links)                         │
 └─────────────────────────────────────────────────────────────────────────┘
                                     ▲
-                                    │ (potential consolidation)
+                                    │ (consolidates)
         ┌───────────────────────────┼───────────────────────────┐
         │                           │                           │
         ▼                           ▼                           ▼
 ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────────────┐
 │ arc-aphasia-bids │  │ stroke-deepisles │  │ huggingface/datasets     │
-│                  │  │ -demo            │  │ (BIDS loader PR)         │
+│ (PRODUCTION)     │  │ -demo            │  │ (CONSUMPTION)            │
 │                  │  │                  │  │                          │
-│ • Upload ARC     │  │ • DeepISLES      │  │ • NATIVE BIDS LOADER     │
-│   to HF Hub      │  │   inference      │  │   load_dataset('bids')   │
-│ • BIDS→HF        │  │ • Gradio UI      │  │ • Nifti() feature type   │
-│   conversion     │  │ • Full test      │  │ • NiiVue integration     │
-│ • Validation     │  │   suite          │  │                          │
+│ • Upload ARC     │  │ • DeepISLES      │  │ • Pending PRs for        │
+│   to HF Hub      │  │   inference      │  │   BIDS loader, lazy      │
+│ • BIDS→HF        │  │ • Gradio UI      │  │   upload, DICOM          │
+│   conversion     │  │ • Full test      │  │ • Merged: Nifti,         │
+│ • Validation     │  │   suite          │  │   NiiVue viz             │
 └──────────────────┘  └──────────────────┘  └──────────────────────────┘
                                 │
                                 ▼
@@ -42,22 +97,22 @@ This document outlines how multiple related neuroimaging repositories could be c
                       │ DeepIsles        │
                       │ (External Ref)   │
                       │                  │
-                      │ • Nature paper   │
-                      │ • SEALS+NVAUTO   │
-                      │   +FACTORIZER    │
+                      │ • Nature 2025    │
+                      │ • Stroke lesion  │
+                      │   segmentation   │
                       │ • Docker image   │
                       └──────────────────┘
 ```
 
 ## Related Repositories
 
-| Repository | Maintainer | Purpose | Link |
-|------------|------------|---------|------|
-| neuroimaging-go-brrrr | @CloseChoice | Consolidation hub for neuroimaging tools | [GitHub](https://github.com/CloseChoice/neuroimaging-go-brrrr) |
-| arc-aphasia-bids | @The-Obstacle-Is-The-Way | Upload ARC dataset (ds004884) to HuggingFace Hub | [GitHub](https://github.com/The-Obstacle-Is-The-Way/arc-aphasia-bids) |
-| stroke-deepisles-demo | @The-Obstacle-Is-The-Way | DeepISLES inference demo with Gradio UI | [GitHub](https://github.com/The-Obstacle-Is-The-Way/stroke-deepisles-demo) |
-| datasets (BIDS loader PR) | @CloseChoice | Native BIDS loader for HuggingFace datasets library | [GitHub](https://github.com/CloseChoice/datasets/tree/feat/bids-loader-streaming-upload-fix) |
-| DeepIsles | @ezequieldlrosa | State-of-the-art stroke lesion segmentation (Nature 2025) | [GitHub](https://github.com/ezequieldlrosa/DeepIsles) |
+| Repository | Type | Purpose | Link |
+|------------|------|---------|------|
+| neuroimaging-go-brrrr | Hub | Consolidation hub for neuroimaging tools | [GitHub](https://github.com/CloseChoice/neuroimaging-go-brrrr) |
+| arc-aphasia-bids | Production | Upload ARC dataset (ds004884) to HuggingFace Hub | [GitHub](https://github.com/The-Obstacle-Is-The-Way/arc-aphasia-bids) |
+| stroke-deepisles-demo | Production | DeepISLES inference demo with Gradio UI | [GitHub](https://github.com/The-Obstacle-Is-The-Way/stroke-deepisles-demo) |
+| huggingface/datasets | Consumption | Pending PRs for BIDS loader, lazy upload fixes | [PR #7886](https://github.com/huggingface/datasets/pull/7886) |
+| DeepIsles | Reference | State-of-the-art stroke lesion segmentation | [GitHub](https://github.com/ezequieldlrosa/DeepIsles) |
 
 ## HuggingFace Resources
 
@@ -68,9 +123,9 @@ This document outlines how multiple related neuroimaging repositories could be c
 
 ## Key Technical Components
 
-### 1. Native BIDS Loader (datasets library PR)
+### 1. BIDS Loader (Consumption - PR #7886)
 
-The `feat/bids-loader-streaming-upload-fix` branch adds native BIDS support to HuggingFace's `datasets` library:
+Native BIDS support for HuggingFace's `datasets` library:
 
 ```python
 from datasets import load_dataset
@@ -83,21 +138,24 @@ ds.push_to_hub("org/dataset-name", num_shards={"train": 500})
 ```
 
 Features:
+
 - Uses `pybids` for BIDS-compliant file discovery
-- `Nifti()` feature type for NIfTI file handling
-- `Nifti1ImageWrapper._repr_html_()` for NiiVue visualization in notebooks
+- `Nifti()` feature type for NIfTI file handling (already merged)
+- `Nifti1ImageWrapper._repr_html_()` for NiiVue visualization (already merged)
 - Streaming support for large datasets
 
-### 2. arc-aphasia-bids
+### 2. arc-aphasia-bids (Production)
 
 Custom pipeline for the Aphasia Recovery Cohort (ARC) dataset:
+
 - Converts OpenNeuro ds004884 (BIDS) to HuggingFace Dataset format
 - Validation against the Scientific Data paper (230 subjects, 902 sessions)
 - Session-level sharding for memory efficiency
 
-### 3. stroke-deepisles-demo
+### 3. stroke-deepisles-demo (Production + Inference)
 
 End-to-end inference demo:
+
 - Loads BIDS/HF neuroimaging data
 - Runs DeepISLES Docker container for stroke lesion segmentation
 - Gradio UI for interactive visualization
@@ -109,7 +167,7 @@ End-to-end inference demo:
 
 Migrate all code into `neuroimaging-go-brrrr` as packages:
 
-```
+```text
 neuroimaging-go-brrrr/
 ├── packages/
 │   ├── arc-bids/              ← arc-aphasia-bids code
@@ -122,11 +180,13 @@ neuroimaging-go-brrrr/
 ```
 
 **Pros:**
+
 - Single source of truth
 - Easier cross-package development
 - Unified CI/CD
 
 **Cons:**
+
 - Larger repository size
 - More complex release management
 - Migration effort required
@@ -135,7 +195,7 @@ neuroimaging-go-brrrr/
 
 Keep repositories separate, use `neuroimaging-go-brrrr` as documentation/coordination hub:
 
-```
+```text
 neuroimaging-go-brrrr/
 ├── docs/
 │   ├── architecture.md        ← How repos relate
@@ -147,47 +207,51 @@ neuroimaging-go-brrrr/
 ```
 
 **Pros:**
+
 - Minimal migration effort
 - Repos remain independently maintainable
 - Clear separation of concerns
 
 **Cons:**
+
 - Coordination overhead
 - Potential for divergence
 - Cross-repo changes require multiple PRs
 
-### Option C: Wait for Upstream Merge
+### Option C: Focus on Upstream First
 
-Wait for the BIDS loader PR to merge into `huggingface/datasets`, then reassess:
+Prioritize getting pending PRs merged into `huggingface/datasets`, then reassess:
 
+- Push [#7886](https://github.com/huggingface/datasets/pull/7886) (BIDS loader) to merge
+- Push [#7892](https://github.com/huggingface/datasets/pull/7892) (lazy upload fix) to merge
 - Once merged, `arc-aphasia-bids` simplifies to example usage
 - Focus consolidation on inference/demo tooling
-- Reduce duplication with upstream library
 
 **Pros:**
+
 - Leverages official HuggingFace support
 - Reduces maintenance burden
 - Community benefits from upstream contribution
 
 **Cons:**
-- Dependent on upstream merge timeline
+
+- Dependent on upstream merge timeline (HF is slow)
 - May need interim solutions
 
 ## Open Questions
 
-1. **Monorepo vs. linked repos?** What structure best serves the community?
+1. **How do we accelerate HuggingFace reviews?** The PRs have been open for weeks. Should we coordinate via Hugging Science Discord to add more reviewers/visibility?
 
-2. **BIDS loader PR timeline?** When is the `feat/bids-loader-streaming-upload-fix` expected to merge to `huggingface/datasets`?
+2. **Monorepo vs. linked repos?** What structure best serves the community?
 
 3. **Demo deployment?** Should `stroke-deepisles-demo` be deployed as a HuggingFace Space alongside `bids-neuroimaging`?
 
-4. **Shared infrastructure?** What CI/CD, testing, or documentation infrastructure should be shared?
-
-5. **Additional datasets?** What other OpenNeuro datasets should be prioritized for HuggingFace upload?
+4. **Additional datasets?** What other OpenNeuro datasets should be prioritized for HuggingFace upload?
    - ds004889 (acute stroke) is mentioned in README.md
 
 ## Next Steps
 
+- [ ] Coordinate via Hugging Science Discord to push pending PRs
 - [ ] Discuss consolidation approach in GitHub Issues
 - [ ] Decide on monorepo vs. linked repos structure
 - [ ] Create issues for specific integration tasks
@@ -201,3 +265,4 @@ Wait for the BIDS loader PR to merge into `huggingface/datasets`, then reassess:
 - [ISLES'22 Challenge](https://isles22.grand-challenge.org/) - Ischemic Stroke Lesion Segmentation
 - [HuggingFace Datasets](https://huggingface.co/docs/datasets/) - Dataset library documentation
 - [BIDS Specification](https://bids-specification.readthedocs.io/) - Brain Imaging Data Structure
+- [Hugging Science Discord](https://discord.gg/huggingface) - Community coordination
