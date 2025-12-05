@@ -1,12 +1,11 @@
-# Consolidation Strategy: neuroimaging-go-brrrr
+# Project Roadmap & Architecture
 
-> **Status**: Draft / Open for Discussion
-> **Date**: 2024-12-05
-> **Contributors**: Open to all
+> **Status**: Active
+> **Last Updated**: 2024-12-05
 
-## Purpose
+## Vision
 
-This repository consolidates neuroimaging tools and pipelines for working with BIDS datasets and NIfTI files. The goal is to coordinate community efforts, avoid duplication, and build practical demos for stroke lesion analysis and related use cases.
+We are building **generic BIDS/NIfTI infrastructure** for HuggingFace by implementing a **specific, high-value pipeline: Stroke Lesion Analysis**. This ensures our tools are battle-tested against real research needs (ARC, ATLAS, DeepISLES) rather than theoretical use cases.
 
 ## What We're Building
 
@@ -19,7 +18,7 @@ This repository consolidates neuroimaging tools and pipelines for working with B
 │                                                                          │
 │   OpenNeuro BIDS ──► Validate ──► Convert ──► push_to_hub() ──► HF Hub   │
 │                                                                          │
-│   Tools: arc-aphasia-bids, stroke-deepisles-demo                         │
+│   Tools: arc-aphasia-bids                                                │
 └──────────────────────────────────────────────────────────────────────────┘
                                     │
                                     ▼
@@ -39,34 +38,26 @@ This repository consolidates neuroimaging tools and pipelines for working with B
 └──────────────────────────────────────────────────────────────────────────┘
 ```
 
-## Repository Structure
+## System Architecture
+
+We use a **modular hub structure with Git submodules**. This approach:
+
+- Bypasses GitHub LFS limits for large assets (e.g., 400MB parquet files in visualization Spaces)
+- Allows independent development and release cycles per tool
+- Maintains a unified entry point for discovery
 
 ```text
-neuroimaging-go-brrrr/
-├── scripts/
-│   ├── download_ds004884.sh
-│   ├── push_to_hub_ds004884_full.py
-│   └── visualization/
-│       ├── ArcAphasiaBids.ipynb
-│       └── ArcAphasiaBidsLoadData.ipynb
+neuroimaging-go-brrrr/           # Coordination hub
+├── scripts/                     # Standalone utilities
 ├── tools/
-│   ├── arc-aphasia-bids/
-│   └── bids-neuroimaging-space/  (git submodule)
-├── docs/
-│   └── brainstorming/
-└── README.md
+│   ├── arc-aphasia-bids/        # Production pipeline tool
+│   └── bids-neuroimaging-space/ # Git submodule → HF Space
+└── docs/
 ```
 
-## Related Repositories
+Tools are standalone utilities, not necessarily PyPI-distributable packages. We call them "tools" to reflect this.
 
-| Repository | Purpose | Link |
-|------------|---------|------|
-| neuroimaging-go-brrrr | Consolidation hub for neuroimaging tools | [GitHub](https://github.com/CloseChoice/neuroimaging-go-brrrr) |
-| arc-aphasia-bids | Upload ARC dataset (ds004884) to Hub | [GitHub](https://github.com/The-Obstacle-Is-The-Way/arc-aphasia-bids) |
-| stroke-deepisles-demo | DeepISLES inference demo with Gradio UI | [GitHub](https://github.com/The-Obstacle-Is-The-Way/stroke-deepisles-demo) |
-| DeepIsles | Stroke lesion segmentation (Nature 2025) | [GitHub](https://github.com/ezequieldlrosa/DeepIsles) |
-
-## Live Demos & Datasets
+## Live Resources
 
 | Resource | Description | Link |
 |----------|-------------|------|
@@ -75,24 +66,25 @@ neuroimaging-go-brrrr/
 
 ## Key Components
 
-### 1. arc-aphasia-bids
+### arc-aphasia-bids
 
-Pipeline for the Aphasia Recovery Cohort (ARC) dataset:
+Production pipeline for the Aphasia Recovery Cohort (ARC) dataset:
 
 - Converts OpenNeuro ds004884 (BIDS) to HuggingFace Dataset format
 - Validation against the Scientific Data paper (230 subjects, 902 sessions)
 - Session-level sharding for memory efficiency
 
-### 2. stroke-deepisles-demo
+### stroke-deepisles-demo
 
-End-to-end inference demo:
+End-to-end stroke lesion segmentation:
 
-- Loads BIDS neuroimaging data
-- Runs DeepISLES Docker container for stroke lesion segmentation
-- Gradio UI for interactive visualization
-- Comprehensive test suite (96 tests, 82% coverage)
+- Loads BIDS neuroimaging data from HuggingFace Hub
+- Runs DeepISLES Docker container (SEALS + NVAUTO + FACTORIZER ensemble)
+- Outputs lesion masks for visualization
 
-### 3. bids-neuroimaging Space
+**Note**: Visualization uses NiiVue directly (not Gradio, which blocks external JavaScript). For deployment, we recommend Docker-based HF Spaces with a Python backend (FastAPI) serving a static NiiVue frontend.
+
+### bids-neuroimaging Space
 
 Web-based visualization using NiiVue:
 
@@ -100,66 +92,47 @@ Web-based visualization using NiiVue:
 - Multiplanar views (axial, coronal, sagittal)
 - Sample data from ARC dataset
 
-## Candidate Datasets
+## Phase 1 Roadmap: The Stroke Pilot
 
-Beyond ARC, other datasets to consider:
+| Priority | Task | Status |
+|----------|------|--------|
+| 1 | **Data Expansion**: Upload ATLAS v2.0 to Hub (955 public T1w images, ISLES 2022 benchmark) | Planned |
+| 2 | **Preprocessing**: Integrate skull stripping (HD-BET, used by DeepISLES) | Planned |
+| 3 | **Demo Deployment**: Deploy stroke-deepisles-demo as Docker-based HF Space | Planned |
+| 4 | **Documentation**: Create CONTRIBUTING.md with conventions | Planned |
 
-| Dataset | Size | Format | Use Case |
-|---------|------|--------|----------|
-| ATLAS v2.0 | 1,271 subjects | BIDS | Stroke lesion segmentation benchmark |
-| ds004889 | Acute stroke | BIDS | Acute stroke imaging |
-| AOMIC | 1,370 subjects | BIDS | Large-scale multimodal MRI |
+## Compute & Data Requirements
 
-## Consolidation Options
+### GPU Requirements
 
-### Option A: Modular Structure (Current)
+DeepISLES requires GPU for inference. For HF Space deployment:
+- Minimum: T4 GPU (16GB VRAM)
+- Recommended: A10G for faster ensemble inference
 
-Keep repositories separate, use `neuroimaging-go-brrrr` as coordination hub with git submodules:
+### Data Governance
 
-**Pros:**
-- Minimal migration effort
-- Repos remain independently maintainable
-- Clear separation of concerns
-- Git submodules link related tools
+All datasets require proper citation per their respective licenses:
 
-**Cons:**
-- Coordination overhead
-- Cross-repo changes require multiple PRs
+| Dataset | Citation |
+|---------|----------|
+| ARC (ds004884) | [Wilson et al., Scientific Data 2024](https://pubmed.ncbi.nlm.nih.gov/39251640/) |
+| ATLAS v2.0 | [Liew et al., Scientific Data 2022](https://www.nature.com/articles/s41597-022-01401-7) |
+| ISLES 2022 | [Hernandez Petzsche et al., Scientific Data 2022](https://www.nature.com/articles/s41597-022-01875-5) |
 
-### Option B: Monorepo
+## Related Repositories
 
-Migrate all code into `neuroimaging-go-brrrr` as packages:
-
-**Pros:**
-- Single source of truth
-- Easier cross-package development
-- Unified CI/CD
-
-**Cons:**
-- Larger repository size
-- LFS/size constraints (e.g., 400MB parquet files)
-- More complex release management
-
-## Open Questions
-
-1. **Additional datasets?** Should we prioritize ATLAS v2.0, ds004889, or others?
-
-2. **Demo deployment?** Should `stroke-deepisles-demo` be deployed as a HuggingFace Space?
-
-3. **Monorepo vs. linked repos?** What structure best serves contributors?
-
-## Next Steps
-
-- [ ] Discuss consolidation approach in GitHub Issues
-- [ ] Add more visualization notebooks
-- [ ] Explore ATLAS v2.0 dataset integration
-- [ ] Document contribution workflow
+| Repository | Purpose | Link |
+|------------|---------|------|
+| neuroimaging-go-brrrr | Coordination hub | [GitHub](https://github.com/CloseChoice/neuroimaging-go-brrrr) |
+| arc-aphasia-bids | ARC dataset upload pipeline | [GitHub](https://github.com/The-Obstacle-Is-The-Way/arc-aphasia-bids) |
+| stroke-deepisles-demo | DeepISLES inference pipeline | [GitHub](https://github.com/The-Obstacle-Is-The-Way/stroke-deepisles-demo) |
+| DeepIsles | Stroke segmentation (Nature 2025) | [GitHub](https://github.com/ezequieldlrosa/DeepIsles) |
 
 ## References
 
-- [OpenNeuro ds004884 (ARC)](https://openneuro.org/datasets/ds004884) - Aphasia Recovery Cohort
-- [OpenNeuro ds004889](https://openneuro.org/datasets/ds004889) - Acute stroke dataset
+- [OpenNeuro ds004884](https://openneuro.org/datasets/ds004884) - Aphasia Recovery Cohort
 - [ATLAS v2.0](https://atlas.grand-challenge.org/) - Stroke lesion benchmark
-- [DeepISLES Paper](https://www.nature.com/articles/s41467-025-62373-x) - Nature 2025
+- [DeepISLES](https://www.nature.com/articles/s41467-025-62373-x) - Nature Communications 2025
 - [BIDS Specification](https://bids-specification.readthedocs.io/) - Brain Imaging Data Structure
-- [NiiVue](https://github.com/niivue/niivue) - Web-based neuroimaging viewer
+- [NiiVue](https://github.com/niivue/niivue) - Web-based neuroimaging viewer (Chris Rorden et al.)
+- [HD-BET](https://github.com/MIC-DKFZ/HD-BET) - Brain extraction tool
