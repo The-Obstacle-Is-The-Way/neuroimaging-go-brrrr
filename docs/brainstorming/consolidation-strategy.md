@@ -4,11 +4,11 @@
 > **Date**: 2024-12-05
 > **Contributors**: Open to all
 
-## The Problem
+## The Opportunity
 
-**HuggingFace has been slow to integrate neuroimaging and BIDS support.** The `datasets` library has excellent support for text, images, and audio, but scientific imaging formats (NIfTI, DICOM, BIDS) have lagged behind.
+**Neuroimaging support in HuggingFace is actively being built.** The `datasets` library has excellent support for text, images, and audio, and the community is now extending this to scientific imaging formats (NIfTI, DICOM, BIDS).
 
-The Hugging Science community is working together to accelerate this. This document outlines how we can consolidate our efforts under `neuroimaging-go-brrrr` to reduce fragmentation and ship faster.
+Several PRs have already been merged, with more in active review. This document outlines how we can consolidate our efforts under `neuroimaging-go-brrrr` to coordinate effectively and avoid duplication.
 
 ## Current State of HuggingFace Neuroimaging Support
 
@@ -23,7 +23,7 @@ The Hugging Science community is working together to accelerate this. This docum
 
 > **Note**: While NIfTI support is merged in the `datasets` library, the HuggingFace Hub dataset viewer may lag behind or require dataset regeneration to fully support the new feature type.
 
-### What's Still Pending (needs community push)
+### What's Currently In Review
 
 | PR | Title | Status | Author |
 |----|-------|--------|--------|
@@ -242,12 +242,12 @@ Prioritize getting pending PRs merged into `huggingface/datasets`, then reassess
 
 **Cons:**
 
-- Dependent on upstream merge timeline (HF is slow)
+- Dependent on upstream merge timeline
 - May need interim solutions
 
 ## Open Questions
 
-1. **How do we accelerate HuggingFace reviews?** The PRs have been open for weeks. Should we coordinate via Hugging Science Discord to add more reviewers/visibility?
+1. **How can we support the HuggingFace review process?** Should we coordinate via Hugging Science Discord to help with testing or provide additional context?
 
 2. **Monorepo vs. linked repos?** What structure best serves the community?
 
@@ -258,7 +258,7 @@ Prioritize getting pending PRs merged into `huggingface/datasets`, then reassess
 
 ## Next Steps
 
-- [ ] Coordinate via Hugging Science Discord to push pending PRs
+- [ ] Coordinate via Hugging Science Discord to support PRs in review
 - [ ] Discuss consolidation approach in GitHub Issues
 - [ ] Decide on monorepo vs. linked repos structure
 - [ ] Create issues for specific integration tasks
