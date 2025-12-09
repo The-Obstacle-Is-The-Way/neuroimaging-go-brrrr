@@ -260,7 +260,7 @@ def build_isles24_file_table(bids_root: Path) -> pd.DataFrame:
             )
         elif total_pheno_files_failed > 0:
             logger.warning(
-                "Phenotype parsing: %d/%d files failed (%.0f%%). "
+                "Phenotype parsing: %d/%d files failed (%.1f%%). "
                 "Some subjects may have missing metadata.",
                 total_pheno_files_failed,
                 total_pheno_files_attempted,

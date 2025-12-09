@@ -144,7 +144,7 @@ def push_dataset_to_hub(
             A good rule of thumb is one shard per example (subject/session).
         private: If True, create a private repository on the Hub.
         token: HuggingFace API token. If None, uses cached credentials.
-        revision: Git branch to push to. Defaults to "main".
+        revision: Git branch to push to. If None (default), uses "main".
         commit_message: Custom commit message for standard (non-sharded) uploads.
     """
 

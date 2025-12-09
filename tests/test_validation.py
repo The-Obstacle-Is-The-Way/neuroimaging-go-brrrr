@@ -238,6 +238,9 @@ def test_validate_dataset_exported(tmp_path: Path) -> None:
 
     result = validate_dataset(tmp_path, config)
     assert isinstance(result, ValidationResult)
+    # Verify the required_files check passed
+    req_check = next(c for c in result.checks if c.name == "required_files")
+    assert req_check.passed
 
 
 def test_dataset_validation_config_exported() -> None:
