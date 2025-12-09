@@ -54,7 +54,9 @@ from ..core.utils import find_single_nifti
 logger = logging.getLogger(__name__)
 
 
-def _load_phenotype_data(phenotype_dir: Path, subject_id: str) -> dict[str, Any]:
+def _load_phenotype_data(
+    phenotype_dir: Path, subject_id: str
+) -> tuple[dict[str, Any], int, int]:
     """
     Load phenotype data for a subject from the phenotype directory.
 
@@ -70,7 +72,7 @@ def _load_phenotype_data(phenotype_dir: Path, subject_id: str) -> dict[str, Any]
         subject_id: Subject ID (e.g., "sub-stroke0001").
 
     Returns:
-        Dictionary with parsed phenotype values.
+        Tuple of (metadata_dict, files_attempted, files_failed).
     """
     # EXACT column name mapping based on Zenodo v7 SSOT
     # demographic_baseline.xlsx columns: Age, Sex, NIHSS at admission, mRS at admission
@@ -91,15 +93,19 @@ def _load_phenotype_data(phenotype_dir: Path, subject_id: str) -> dict[str, Any]
         "mrs_3month": None,
     }
 
+    files_attempted = 0
+    files_failed = 0
+
     subject_pheno_dir = phenotype_dir / subject_id
     if not subject_pheno_dir.exists():
-        return meta
+        return meta, files_attempted, files_failed
 
     # Look for XLSX files in ses-01 and ses-02 (Zenodo v7 uses xlsx, not csv)
     for ses_dir in [subject_pheno_dir / "ses-01", subject_pheno_dir / "ses-02"]:
         if not ses_dir.exists():
             continue
         for xlsx_file in ses_dir.glob("*.xlsx"):
+            files_attempted += 1
             try:
                 df = pd.read_excel(xlsx_file)
                 if df.empty:
@@ -117,10 +123,11 @@ def _load_phenotype_data(phenotype_dir: Path, subject_id: str) -> dict[str, Any]
                                 else:
                                     meta[field_name] = float(val)
             except Exception as e:
+                files_failed += 1
                 logger.warning("Error reading phenotype file %s: %s", xlsx_file, e)
                 continue
 
-    return meta
+    return meta, files_attempted, files_failed
 
 
 def build_isles24_file_table(bids_root: Path) -> pd.DataFrame:
@@ -134,13 +141,18 @@ def build_isles24_file_table(bids_root: Path) -> pd.DataFrame:
     - raw_data/sub-strokeXXXX/ses-01/ (Acute): ncct, cta, ctp, perfusion-maps/
     - derivatives/sub-strokeXXXX/ses-01/ (processed): space-ncct files
     - derivatives/sub-strokeXXXX/ses-02/ (follow-up): dwi, adc, lesion-msk
-    - phenotype/sub-strokeXXXX/ses-01/ and ses-02/: CSV files
+    - phenotype/sub-strokeXXXX/ses-01/ and ses-02/: XLSX files
 
     Args:
         bids_root: Path to the root of the ISLES24 dataset (e.g., data/zenodo/isles24/train).
 
     Returns:
         DataFrame with one row per subject.
+
+    Raises:
+        ValueError: If raw_data directory is not found.
+        RuntimeError: If more than 50% of phenotype files fail to parse,
+            indicating a systematic issue (e.g., openpyxl not installed).
     """
     bids_root = Path(bids_root).resolve()
 
@@ -153,6 +165,10 @@ def build_isles24_file_table(bids_root: Path) -> pd.DataFrame:
         raise ValueError(f"raw_data directory not found at {raw_data_root}")
 
     rows = []
+
+    # Track phenotype parse statistics across all subjects
+    total_pheno_files_attempted = 0
+    total_pheno_files_failed = 0
 
     # Iterate over subjects in raw_data
     subject_dirs = sorted(raw_data_root.glob("sub-*"))
@@ -202,7 +218,11 @@ def build_isles24_file_table(bids_root: Path) -> pd.DataFrame:
         lesion_mask = find_single_nifti(ses02_deriv, "*_space-ncct_lesion-msk.nii.gz")
 
         # --- METADATA ---
-        meta = _load_phenotype_data(phenotype_root, subject_id)
+        meta, pheno_attempted, pheno_failed = _load_phenotype_data(
+            phenotype_root, subject_id
+        )
+        total_pheno_files_attempted += pheno_attempted
+        total_pheno_files_failed += pheno_failed
 
         row = {
             "subject_id": subject_id,
@@ -230,6 +250,26 @@ def build_isles24_file_table(bids_root: Path) -> pd.DataFrame:
             "mrs_3month": meta.get("mrs_3month"),
         }
         rows.append(row)
+
+    # Check for systematic phenotype parsing failures
+    if total_pheno_files_attempted > 0:
+        failure_rate = total_pheno_files_failed / total_pheno_files_attempted
+        if failure_rate > 0.5:
+            raise RuntimeError(
+                f"Phenotype parsing failed for "
+                f"{total_pheno_files_failed}/{total_pheno_files_attempted} files "
+                f"({failure_rate:.0%}). This indicates a systematic issue - check "
+                f"that openpyxl is installed (`pip install openpyxl`) and phenotype "
+                f"XLSX files are valid."
+            )
+        elif total_pheno_files_failed > 0:
+            logger.warning(
+                "Phenotype parsing: %d/%d files failed (%.0f%%). "
+                "Some subjects may have missing metadata.",
+                total_pheno_files_failed,
+                total_pheno_files_attempted,
+                failure_rate * 100,
+            )
 
     return pd.DataFrame(rows)
 

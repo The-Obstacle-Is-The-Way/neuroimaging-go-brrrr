@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 import tempfile
 from pathlib import Path
-from typing import Any
 
 import pandas as pd
 import pyarrow.parquet as pq
@@ -45,7 +44,7 @@ def validate_file_table_columns(
 
 
 def build_hf_dataset(
-    config: DatasetBuilderConfig,  # Reserved for future path resolution
+    config: DatasetBuilderConfig,
     file_table: pd.DataFrame,
     features: Features,
 ) -> Dataset:
@@ -57,11 +56,16 @@ def build_hf_dataset(
 
     Args:
         config: Configuration containing BIDS root path and HF repo info.
-            Currently used for API consistency; will be used in future versions
-            for resolving relative file paths against bids_root.
+            Currently reserved for API consistency; future versions may use
+            this for resolving relative file paths against bids_root.
         file_table: DataFrame with one row per "example" containing:
             - One or more columns with NIfTI file paths (as strings)
             - Scalar metadata columns (subject_id, age, etc.)
+
+            **Important**: All file paths in the DataFrame MUST be absolute paths.
+            The HuggingFace datasets library requires absolute paths to locate
+            and embed NIfTI files. Use `Path.resolve()` when building file tables
+            to ensure paths are absolute.
         features: HF Features object defining the schema, including:
             - `Nifti()` for NIfTI image columns
             - `Value("string")`, `Value("float32")`, etc. for metadata
@@ -78,7 +82,7 @@ def build_hf_dataset(
 
         file_table = pd.DataFrame({
             "subject_id": ["sub-001", "sub-002"],
-            "t1w": ["path/to/t1w_001.nii.gz", "path/to/t1w_002.nii.gz"],
+            "t1w": ["/abs/path/to/t1w_001.nii.gz", "/abs/path/to/t1w_002.nii.gz"],
             "age": [25.0, 30.0],
         })
 
@@ -111,7 +115,12 @@ def push_dataset_to_hub(
     ds: Dataset,
     config: DatasetBuilderConfig,
     embed_external_files: bool = True,
-    **push_kwargs: Any,
+    *,
+    num_shards: int | None = None,
+    private: bool = False,
+    token: str | None = None,
+    revision: str | None = None,
+    commit_message: str | None = None,
 ) -> None:
     """
     Push a dataset to the Hugging Face Hub.
@@ -130,17 +139,24 @@ def push_dataset_to_hub(
         embed_external_files: If True (default), NIfTI file contents are embedded
             into Parquet shards and uploaded to Hub. Required for datasets to be
             usable by others. Only set to False for local-only testing.
-        **push_kwargs: Additional keyword arguments passed to `ds.push_to_hub()`.
-            - num_shards (int): Recommended for large datasets.
+        num_shards: Number of Parquet shards to split the dataset into.
+            Recommended for large datasets to prevent OOM during embedding.
+            A good rule of thumb is one shard per example (subject/session).
+        private: If True, create a private repository on the Hub.
+        token: HuggingFace API token. If None, uses cached credentials.
+        revision: Git branch to push to. Defaults to "main".
+        commit_message: Custom commit message for standard (non-sharded) uploads.
     """
-    num_shards = push_kwargs.get("num_shards")
 
     # Use standard push_to_hub if we don't need heavy sharding logic
     if not num_shards or num_shards <= 1:
         ds.push_to_hub(
             config.hf_repo_id,
             embed_external_files=embed_external_files,
-            **push_kwargs,
+            private=private,
+            token=token,
+            revision=revision,
+            commit_message=commit_message,
         )
         return
 
@@ -149,8 +165,8 @@ def push_dataset_to_hub(
         f"Starting memory-efficient push to {config.hf_repo_id} with {num_shards} shards..."
     )
 
-    api = HfApi()
-    api.create_repo(config.hf_repo_id, repo_type="dataset", exist_ok=True)
+    api = HfApi(token=token)
+    api.create_repo(config.hf_repo_id, repo_type="dataset", private=private, exist_ok=True)
 
     split_name = config.split if config.split else "train"
 
@@ -228,6 +244,11 @@ def push_dataset_to_hub(
                 commit_message="Upload dataset metadata",
             )
         else:
-            logger.warning("dataset_info.json was not generated.")
+            logger.warning(
+                "dataset_info.json was not generated. The dataset may not load correctly. "
+                "This can happen if the dataset has no features defined or is empty. "
+                "To fix: ensure the dataset has rows and features are set via ds.cast(). "
+                "You may need to manually upload a dataset_info.json file to the repository."
+            )
 
     logger.info("Memory-efficient upload complete.")

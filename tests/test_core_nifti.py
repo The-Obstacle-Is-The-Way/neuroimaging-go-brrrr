@@ -401,9 +401,9 @@ class TestPushDatasetToHub:
             # Call with num_shards=2 using real dataset
             push_dataset_to_hub(real_ds, config, num_shards=2)
 
-            # Verify create_repo called
+            # Verify create_repo called with explicit private parameter
             mock_api_instance.create_repo.assert_called_once_with(
-                "test/arc-aphasia", repo_type="dataset", exist_ok=True
+                "test/arc-aphasia", repo_type="dataset", private=False, exist_ok=True
             )
 
             # Verify embed_table_storage called twice (once per shard)

@@ -83,9 +83,11 @@ def test_validate_isles24_download_missing_path() -> None:
 def test_check_phenotype_readable_no_dir(tmp_path: Path) -> None:
     """Test phenotype check when directory doesn't exist."""
     check = check_phenotype_readable(tmp_path)
-    # Should pass (optional directory)
+    # Should be skipped (optional directory)
     assert check.passed
+    assert check.skipped
     assert "not found" in check.details
+    assert "incomplete extraction" in check.details
 
 
 def test_check_phenotype_readable_no_xlsx(tmp_path: Path) -> None:
@@ -94,7 +96,9 @@ def test_check_phenotype_readable_no_xlsx(tmp_path: Path) -> None:
     phenotype_dir.mkdir()
     check = check_phenotype_readable(tmp_path)
     assert check.passed
-    assert "No XLSX" in check.details
+    assert check.skipped
+    assert "none found" in check.actual
+    assert "metadata will be unavailable" in check.details
 
 
 def test_verify_isles24_archive(tmp_path: Path) -> None:

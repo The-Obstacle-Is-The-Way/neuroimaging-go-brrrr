@@ -7,9 +7,17 @@ from pathlib import Path
 import pytest
 
 from bids_hub.validation import (
+    ARC_VALIDATION_CONFIG,
+    EXPECTED_COUNTS,
+    REQUIRED_BIDS_FILES,
+    DatasetValidationConfig,
     ValidationCheck,
     ValidationResult,
+    check_count,
+    check_zero_byte_files,
     validate_arc_download,
+    validate_dataset,
+    verify_md5,
 )
 
 
@@ -122,3 +130,123 @@ def test_validation_with_tolerance(mock_bids_root: Path) -> None:
     # But if we mock ONLY the expected counts to be small, we can test tolerance
     # This is tricky without mocking EXPECTED_COUNTS directly.
     # Instead, let's rely on the fact that 0.0 tolerance works as expected above.
+
+
+# --- Tests for backward compatibility aliases ---
+
+
+def test_expected_counts_matches_config() -> None:
+    """Test that EXPECTED_COUNTS backward compat alias matches ARC_VALIDATION_CONFIG."""
+    # Subjects count should match
+    assert EXPECTED_COUNTS["subjects"] == ARC_VALIDATION_CONFIG.expected_counts["subjects"]
+    # Sessions count should match
+    assert EXPECTED_COUNTS["sessions"] == ARC_VALIDATION_CONFIG.expected_counts["sessions"]
+    # T1w (legacy uses t1w_series)
+    assert EXPECTED_COUNTS["t1w_series"] == ARC_VALIDATION_CONFIG.expected_counts["t1w"]
+    # Lesion masks (legacy uses lesion_masks)
+    assert EXPECTED_COUNTS["lesion_masks"] == ARC_VALIDATION_CONFIG.expected_counts["lesion"]
+
+
+def test_required_bids_files_matches_config() -> None:
+    """Test that REQUIRED_BIDS_FILES backward compat alias matches ARC_VALIDATION_CONFIG."""
+    assert set(REQUIRED_BIDS_FILES) == set(ARC_VALIDATION_CONFIG.required_files)
+
+
+# --- Tests for skipped checks ---
+
+
+def test_validation_check_skipped_field() -> None:
+    """Test ValidationCheck skipped field behavior."""
+    # Default skipped is False
+    check = ValidationCheck("test", "a", "a", True)
+    assert check.skipped is False
+
+    # Skipped check
+    skipped_check = ValidationCheck("test", "a", "a", True, skipped=True)
+    assert skipped_check.skipped is True
+    assert skipped_check.passed is True  # Skipped checks are passed but flagged
+
+
+def test_validation_result_skipped_count() -> None:
+    """Test ValidationResult.skipped_count property."""
+    result = ValidationResult(bids_root=Path("/test"))
+    result.add(ValidationCheck("check1", "a", "a", True))
+    result.add(ValidationCheck("check2", "b", "b", True, skipped=True))
+    result.add(ValidationCheck("check3", "c", "d", False))
+
+    assert result.skipped_count == 1
+    assert result.passed_count == 1  # Skipped checks don't count as passed
+    assert result.failed_count == 1
+    assert result.all_passed is False  # check3 failed
+
+
+def test_validation_result_summary_with_skipped() -> None:
+    """Test ValidationResult.summary() includes skipped checks."""
+    result = ValidationResult(bids_root=Path("/test"))
+    result.add(ValidationCheck("check1", "a", "a", True))
+    result.add(ValidationCheck("check2", "b", "b", True, skipped=True, details="skipped reason"))
+
+    summary = result.summary()
+    assert "SKIP" in summary
+    assert "skipped reason" in summary
+    assert "1 skipped" in summary
+
+
+# --- Tests for exported functions ---
+
+
+def test_check_count_exported() -> None:
+    """Test that check_count is properly exported and works."""
+    check = check_count("test", 10, 10)
+    assert check.passed is True
+    assert check.name == "test"
+
+
+def test_check_zero_byte_files_exported(tmp_path: Path) -> None:
+    """Test that check_zero_byte_files is properly exported and works."""
+    # Create a zero-byte file
+    (tmp_path / "test.nii.gz").touch()
+    count, files = check_zero_byte_files(tmp_path)
+    assert count == 1
+    assert "test.nii.gz" in files[0]
+
+
+def test_verify_md5_exported(tmp_path: Path) -> None:
+    """Test that verify_md5 is properly exported and works."""
+    import hashlib
+
+    test_file = tmp_path / "test.bin"
+    test_file.write_bytes(b"hello")
+    expected_md5 = hashlib.md5(b"hello").hexdigest()
+
+    check = verify_md5(test_file, expected_md5)
+    assert check.passed is True
+
+
+def test_validate_dataset_exported(tmp_path: Path) -> None:
+    """Test that validate_dataset is properly exported and works."""
+    # Create minimal structure
+    tmp_path.mkdir(exist_ok=True)
+    (tmp_path / "test.txt").write_text("test")
+
+    config = DatasetValidationConfig(
+        name="test",
+        expected_counts={},
+        required_files=["test.txt"],
+        modality_patterns={},
+    )
+
+    result = validate_dataset(tmp_path, config)
+    assert isinstance(result, ValidationResult)
+
+
+def test_dataset_validation_config_exported() -> None:
+    """Test that DatasetValidationConfig is properly exported."""
+    config = DatasetValidationConfig(
+        name="test",
+        expected_counts={"subjects": 10},
+        required_files=["test.txt"],
+        modality_patterns={"t1w": "*_T1w.nii.gz"},
+    )
+    assert config.name == "test"
+    assert config.expected_counts["subjects"] == 10

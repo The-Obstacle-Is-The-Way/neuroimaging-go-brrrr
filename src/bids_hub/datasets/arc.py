@@ -90,22 +90,32 @@ def build_arc_file_table(bids_root: Path) -> pd.DataFrame:
         raise FileNotFoundError(f"participants.tsv not found at {participants_tsv}")
 
     participants = pd.read_csv(participants_tsv, sep="\t")
+    total_subjects_in_tsv = len(participants)
 
     # Build file table - one row per session
     rows: list[dict[str, str | float | list[str] | None]] = []
+
+    # Track statistics for summary logging
+    subjects_found = 0
+    subjects_missing_dir = 0
+    subjects_no_sessions = 0
 
     for _, row in participants.iterrows():
         subject_id = str(row["participant_id"])
         subject_dir = bids_root / subject_id
 
         if not subject_dir.exists():
+            subjects_missing_dir += 1
             continue
 
         # Find all sessions for this subject
         session_dirs = sorted(subject_dir.glob("ses-*"))
 
         if not session_dirs:
+            subjects_no_sessions += 1
             continue
+
+        subjects_found += 1
 
         # Extract subject-level metadata (same for all sessions)
         age_at_stroke_raw = row.get("age_at_stroke")
@@ -167,6 +177,26 @@ def build_arc_file_table(bids_root: Path) -> pd.DataFrame:
                     "wab_type": wab_type,
                 }
             )
+
+    # Log summary of what was found vs what was expected
+    total_sessions = len(rows)
+    skipped = subjects_missing_dir + subjects_no_sessions
+    if skipped > 0:
+        logger.warning(
+            "Built file table with %d sessions from %d subjects "
+            "(participants.tsv lists %d; %d missing directories, %d with no sessions)",
+            total_sessions,
+            subjects_found,
+            total_subjects_in_tsv,
+            subjects_missing_dir,
+            subjects_no_sessions,
+        )
+    else:
+        logger.info(
+            "Built file table with %d sessions from %d subjects",
+            total_sessions,
+            subjects_found,
+        )
 
     return pd.DataFrame(rows)
 

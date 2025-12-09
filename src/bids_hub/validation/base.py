@@ -13,13 +13,24 @@ from pathlib import Path
 
 @dataclass
 class ValidationCheck:
-    """Result of a single validation check."""
+    """Result of a single validation check.
+
+    Attributes:
+        name: Name of the check.
+        expected: What was expected.
+        actual: What was found.
+        passed: Whether the check passed. Skipped checks should have passed=True.
+        details: Additional details about the check result.
+        skipped: If True, this check was skipped (e.g., optional directory not found).
+            Skipped checks don't count as failures but are reported separately.
+    """
 
     name: str
     expected: str
     actual: str
     passed: bool
     details: str = ""
+    skipped: bool = False
 
 
 @dataclass
@@ -31,18 +42,23 @@ class ValidationResult:
 
     @property
     def all_passed(self) -> bool:
-        """Return True if all checks passed."""
+        """Return True if all checks passed (skipped checks count as passed)."""
         return all(c.passed for c in self.checks)
 
     @property
     def passed_count(self) -> int:
-        """Count of passed checks."""
-        return sum(1 for c in self.checks if c.passed)
+        """Count of passed checks (excluding skipped)."""
+        return sum(1 for c in self.checks if c.passed and not c.skipped)
 
     @property
     def failed_count(self) -> int:
         """Count of failed checks."""
         return sum(1 for c in self.checks if not c.passed)
+
+    @property
+    def skipped_count(self) -> int:
+        """Count of skipped checks."""
+        return sum(1 for c in self.checks if c.skipped)
 
     def add(self, check: ValidationCheck) -> None:
         """Add a validation check result."""
@@ -55,7 +71,12 @@ class ValidationResult:
             "=" * 60,
         ]
         for check in self.checks:
-            status = "✅ PASS" if check.passed else "❌ FAIL"
+            if check.skipped:
+                status = "⏭️ SKIP"
+            elif check.passed:
+                status = "✅ PASS"
+            else:
+                status = "❌ FAIL"
             lines.append(f"{status} {check.name}")
             lines.append(f"       Expected: {check.expected}")
             lines.append(f"       Actual:   {check.actual}")
@@ -64,7 +85,13 @@ class ValidationResult:
 
         lines.append("=" * 60)
         if self.all_passed:
-            lines.append("✅ All validations passed! Data is ready for HF push.")
+            if self.skipped_count > 0:
+                lines.append(
+                    f"✅ All validations passed! ({self.skipped_count} skipped) "
+                    "Data is ready for HF push."
+                )
+            else:
+                lines.append("✅ All validations passed! Data is ready for HF push.")
         else:
             lines.append(
                 f"❌ {self.failed_count}/{len(self.checks)} checks failed. "

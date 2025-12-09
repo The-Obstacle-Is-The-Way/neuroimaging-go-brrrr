@@ -76,7 +76,7 @@ def check_phenotype_readable(bids_root: Path) -> ValidationCheck:
         bids_root: Path to ISLES24 root (containing phenotype/ dir)
 
     Returns:
-        ValidationCheck with pass/fail status
+        ValidationCheck with pass/fail/skipped status
     """
     phenotype_dir = bids_root / "phenotype"
     if not phenotype_dir.exists():
@@ -84,18 +84,20 @@ def check_phenotype_readable(bids_root: Path) -> ValidationCheck:
             name="phenotype_readable",
             expected="phenotype/ exists",
             actual="directory not found",
-            passed=True,  # Not a failure, may be optional
-            details="phenotype/ directory not found (skipping check)",
+            passed=True,  # Skipped checks are passed but flagged
+            skipped=True,
+            details="phenotype/ directory not found - check may indicate incomplete extraction",
         )
 
     xlsx_files = list(phenotype_dir.rglob("*.xlsx"))
     if not xlsx_files:
         return ValidationCheck(
             name="phenotype_readable",
-            expected="XLSX files",
+            expected="XLSX files in phenotype/",
             actual="none found",
-            passed=True,
-            details="No XLSX files found in phenotype/ (may be OK)",
+            passed=True,  # Skipped checks are passed but flagged
+            skipped=True,
+            details="No XLSX files found in phenotype/ - metadata will be unavailable",
         )
 
     try:
