@@ -1,62 +1,91 @@
-# Phase 2: Update pyproject.toml
+# Phase 2: Replace pyproject.toml
 
-**Complexity**: Medium (careful merge)
+**Complexity**: Medium (full replacement)
 
 ---
 
-## Current State (neuroimaging-go-brrrr)
+## Strategy
+
+**REPLACE** the entire `pyproject.toml` with the target content below.
+
+This is cleaner than merging because:
+1. The target file is small and well-understood
+2. Merging risks missing critical sections
+3. The reference pyproject.toml is complete and tested
+
+---
+
+## Current State (neuroimaging-go-brrrr) - PROBLEMS
 
 ```toml
 [project]
 name = "neuroimaging-go-brrrr"
 version = "0.1.0"
 description = "Neuroimaging tools for HuggingFace Hub"
-requires-python = ">=3.11"
+requires-python = ">=3.11"  # ❌ bids-hub supports 3.10
 dependencies = [
   "datasets>=3.4.0",
   "huggingface-hub>=0.32.0",
   "nibabel>=5.0.0",
   "pandas>=2.0.0",
-  "pandas-stubs>=2.3.3.251201",  # WRONG: dev dep in runtime
+  "pandas-stubs>=2.3.3.251201",  # ❌ WRONG: dev dep in runtime
 ]
+# ❌ Missing: typer, openpyxl, hf-xet
+# ❌ Missing: [project.scripts]
+# ❌ Missing: [tool.hatch.build]
+# ❌ Missing: [tool.uv.sources] datasets pin
 
-[dependency-groups]
+[dependency-groups]  # ❌ Non-standard, should use [project.optional-dependencies]
 dev = [...]
 
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-
-[tool.pytest]
-testpaths = ["tests"]
-addopts = ["-v", "--tb=short"]
-
-[tool.ruff]
-target-version = "py311"
-line-length = 100
-extend-exclude = ["*.ipynb"]
-
-[tool.ruff.lint]
-select = ["E", "F", "I", "B", "UP", "SIM", "PTH", "RUF"]
+# ❌ Missing: classifiers
+# ❌ Missing: [tool.mypy] section
 ```
 
 ---
 
-## Target State (after merge)
+## Target State - COMPLETE pyproject.toml
+
+Write this EXACT content to `pyproject.toml`:
 
 ```toml
 [project]
 name = "neuroimaging-go-brrrr"
 version = "0.2.0"
-description = "Upload BIDS neuroimaging datasets to HuggingFace Hub"
+description = "Upload BIDS neuroimaging datasets (ARC, ISLES24) to HuggingFace Hub"
 readme = "README.md"
 license = "Apache-2.0"
-requires-python = ">=3.10"  # bids-hub supports 3.10+
+requires-python = ">=3.10"
 authors = [
     { name = "The-Obstacle-Is-The-Way" },
     { name = "TobiasPitters" },
 ]
-keywords = ["bids", "nifti", "neuroimaging", "huggingface", "datasets", "mri", "stroke", "aphasia"]
+keywords = [
+    "bids",
+    "nifti",
+    "neuroimaging",
+    "huggingface",
+    "datasets",
+    "mri",
+    "ct",
+    "stroke",
+    "aphasia",
+    "isles",
+    "isles24",
+    "perfusion",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Medical Science Apps.",
+]
 
 dependencies = [
     "datasets>=3.4.0",
@@ -100,7 +129,7 @@ extend-exclude = ["*.ipynb"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "SIM", "PTH", "RUF"]
-ignore = ["B008"]  # typer false positive
+ignore = ["B008"]  # Typer default() false positive
 
 [tool.ruff.lint.isort]
 known-first-party = ["bids_hub"]
@@ -117,35 +146,46 @@ warn_unused_configs = true
 disallow_untyped_defs = true
 ignore_missing_imports = true
 strict_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
 
 [tool.uv.sources]
 # CRITICAL: Pin to specific commit until upstream PR #7896 is merged.
 # PyPI stable has embed_table_storage bug causing SIGKILL on Sequence(Nifti()) after ds.shard()
+# See UPSTREAM_BUG.md for full details.
 datasets = { git = "https://github.com/huggingface/datasets.git", rev = "004a5bf4addd9293d6d40f43360c03c8f7e42b28" }
 ```
 
 ---
 
-## Key Changes
+## Key Changes Summary
 
 | Section | Change | Why |
 |---------|--------|-----|
-| `dependencies` | Add `typer`, `openpyxl`, `hf-xet` | Required for CLI and ISLES24 |
-| `dependencies` | Remove `pandas-stubs` | It's a dev dep |
+| `version` | `0.1.0` → `0.2.0` | Major feature addition |
 | `requires-python` | `>=3.11` → `>=3.10` | bids-hub supports 3.10 |
+| `dependencies` | Add `typer`, `openpyxl`, `hf-xet` | Required for CLI and ISLES24 |
+| `dependencies` | Remove `pandas-stubs` | It's a dev dep, not runtime |
+| `[dependency-groups]` → `[project.optional-dependencies]` | Use standard PEP 621 | Proper standardization |
 | `[project.scripts]` | Add `bids-hub` CLI | Entry point |
 | `[tool.hatch.build]` | Add `packages = ["src/bids_hub"]` | Tell hatch where package is |
+| `[tool.mypy]` | Add complete config | Was in separate mypy.ini |
 | `[tool.uv.sources]` | Add datasets git pin | **CRITICAL**: Prevents SIGKILL |
 | `[tool.ruff.lint]` | Add `ignore = ["B008"]` | Typer false positive |
+| `classifiers` | Add full list | PyPI metadata |
 
 ---
 
 ## Verification
 
 ```bash
-# Sync dependencies
+# 1. Sync dependencies (this validates pyproject.toml syntax)
 uv sync --all-extras
 
-# Verify CLI is installed
+# 2. Verify CLI is installed
 uv run bids-hub --help
+
+# 3. Verify datasets is pinned to git
+uv pip show datasets | grep -i location
+# Should show git-based install, not PyPI
 ```

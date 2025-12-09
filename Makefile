@@ -1,18 +1,21 @@
-.PHONY: help install lint format check test test-cov clean all
+.PHONY: help install lint format typecheck test test-cov clean pre-commit all
 
 help:
 	@echo "Available targets:"
-	@echo "  install    - Install dependencies with uv"
-	@echo "  lint       - Run ruff linter"
-	@echo "  format     - Format code with ruff"
-	@echo "  check      - Run mypy type checker"
-	@echo "  test       - Run pytest"
-	@echo "  test-cov   - Run pytest with coverage"
-	@echo "  all        - Run lint, check, test"
-	@echo "  clean      - Remove cache directories"
+	@echo "  all         - Run lint, typecheck, and test"
+	@echo "  install     - Install dependencies with uv"
+	@echo "  lint        - Run ruff linter"
+	@echo "  format      - Format code with ruff"
+	@echo "  typecheck   - Run mypy type checker"
+	@echo "  test        - Run pytest"
+	@echo "  test-cov    - Run pytest with coverage"
+	@echo "  pre-commit  - Run pre-commit on all files"
+	@echo "  clean       - Remove build artifacts"
+
+all: lint typecheck test
 
 install:
-	uv sync --dev
+	uv sync --all-extras
 
 lint:
 	uv run ruff check .
@@ -20,17 +23,20 @@ lint:
 format:
 	uv run ruff format .
 
-check:
-	uv run mypy --strict --python-version 3.11 --ignore-missing-imports src/ tests/ scripts/
+typecheck:
+	uv run mypy src
 
 test:
 	uv run pytest
 
 test-cov:
-	uv run pytest --cov --cov-report=term-missing
+	uv run pytest --cov=bids_hub --cov-report=term-missing
 
-all: lint check test
+pre-commit:
+	uv run pre-commit run --all-files
 
 clean:
-	rm -rf .pytest_cache .mypy_cache .ruff_cache __pycache__
+	rm -rf build/ dist/ *.egg-info/
+	rm -rf .pytest_cache/ .mypy_cache/ .ruff_cache/
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+	find . -type f -name "*.pyc" -delete

@@ -15,18 +15,20 @@ We're integrating a complete, battle-tested production pipeline (1,976 lines) in
 | Broken toy script | Working CLI with 10+ commands |
 | Missing deps | Complete dependency set + critical git pin |
 | No tests | 9 test files with fixtures |
+| Minimal .gitignore | Complete .gitignore with BIDS patterns |
 
 ---
 
 ## Phase Overview
 
-| Phase | Description | Complexity |
-|-------|-------------|------------|
-| **Phase 1** | Copy `src/bids_hub/` | Trivial (copy) |
-| **Phase 2** | Update `pyproject.toml` | Medium (merge configs) |
-| **Phase 3** | Copy tests | Trivial (copy) |
-| **Phase 4** | Delete obsolete scripts | Trivial (delete) |
-| **Phase 5** | Verify & commit | Verify (run tests) |
+| Phase | Spec | Description | Complexity |
+|-------|------|-------------|------------|
+| 1 | [01-copy-source.md](./01-copy-source.md) | Copy `src/bids_hub/` + docs | Trivial |
+| 2 | [02-update-pyproject.md](./02-update-pyproject.md) | Replace `pyproject.toml` | Medium |
+| 3 | [02b-merge-configs.md](./02b-merge-configs.md) | Merge .gitignore, .pre-commit, Makefile | Medium |
+| 4 | [03-copy-tests.md](./03-copy-tests.md) | Replace tests/ | Trivial |
+| 5 | [04-cleanup.md](./04-cleanup.md) | Delete obsolete + copy scripts | Trivial |
+| 6 | [05-verify.md](./05-verify.md) | Full verification | Verify |
 
 ---
 
@@ -44,100 +46,119 @@ The package inside is `bids_hub`. The repo that hosts it is `neuroimaging-go-brr
 
 ---
 
-## Files to Copy
+## Complete File Mapping
 
-### Source → Destination
+### Files to COPY
 
-```
-_reference_repos/bids-hub/src/bids_hub/    →    src/bids_hub/
-_reference_repos/bids-hub/tests/           →    tests/
-_reference_repos/bids-hub/UPSTREAM_BUG.md  →    docs/UPSTREAM_BUG.md
-_reference_repos/bids-hub/CLAUDE.md        →    CLAUDE.md (merge or replace)
-```
+| Source | Destination | Notes |
+|--------|-------------|-------|
+| `src/bids_hub/` | `src/bids_hub/` | Complete package (1,976 lines) |
+| `tests/` | `tests/` | Replace existing (9 test files) |
+| `CLAUDE.md` | `CLAUDE.md` | Replace (reference has complete context) |
+| `UPSTREAM_BUG.md` | `UPSTREAM_BUG.md` | New file (critical upstream bug docs) |
+| `CITATION.cff` | `CITATION.cff` | New file (citation metadata) |
+| `CHANGELOG.md` | `CHANGELOG.md` | New file (version history) |
+| ~~`CONTRIBUTING.md`~~ | ~~`CONTRIBUTING.md`~~ | **SKIP** - Keep target's version |
+| `scripts/download_arc.sh` | `scripts/download_arc.sh` | New file (robust download script) |
+| `scripts/download_isles24.sh` | `scripts/download_isles24.sh` | New file (ISLES24 download) |
 
-### Files to Delete
+### Files to MERGE
 
-```
-src/neuroimaging_go_brrrr/          # Empty skeleton, useless
-scripts/push_to_hub_ds004884_full.py  # Broken toy script
-scripts/download_ds004884.sh          # One-liner, not needed
-```
+| Source | Target | Notes |
+|--------|--------|-------|
+| `pyproject.toml` | `pyproject.toml` | Replace entirely (see Phase 2) |
+| `.gitignore` | `.gitignore` | Append BIDS patterns (see Phase 3) |
+| `.pre-commit-config.yaml` | `.pre-commit-config.yaml` | Merge mypy deps (see Phase 3) |
+| `Makefile` | `Makefile` | Merge targets (see Phase 3) |
 
-### Files to Keep
+### Files to DELETE
 
-```
-scripts/visualization/              # Tobias's notebooks (consumption demo)
-docs/brainstorming/                 # Context
-```
+| File | Reason |
+|------|--------|
+| `src/neuroimaging_go_brrrr/` | Empty skeleton, useless |
+| `scripts/push_to_hub_ds004884_full.py` | Broken toy script (wrong API, no validation) |
+| `scripts/download_ds004884.sh` | Replaced by `download_arc.sh` |
 
----
+### Files to KEEP (no changes)
 
-## pyproject.toml Changes
-
-### Current (broken)
-```toml
-name = "neuroimaging-go-brrrr"
-dependencies = [
-  "datasets>=3.4.0",
-  "huggingface-hub>=0.32.0",
-  "nibabel>=5.0.0",
-  "pandas>=2.0.0",
-  "pandas-stubs>=2.3.3.251201",  # This is a dev dep, not runtime
-]
-# Missing: typer, openpyxl, hf-xet
-# Missing: [project.scripts]
-# Missing: [tool.uv.sources] datasets pin
-```
-
-### Target (working)
-```toml
-name = "neuroimaging-go-brrrr"  # Keep repo name
-version = "0.2.0"
-
-dependencies = [
-  "datasets>=3.4.0",
-  "hf-xet>=1.0.0",
-  "huggingface-hub>=0.32.0",
-  "nibabel>=5.0.0",
-  "openpyxl>=3.1.5",
-  "pandas>=2.0.0",
-  "typer>=0.12.0",
-]
-
-[project.scripts]
-bids-hub = "bids_hub.cli:app"
-
-[tool.hatch.build.targets.wheel]
-packages = ["src/bids_hub"]
-
-[tool.uv.sources]
-datasets = { git = "https://github.com/huggingface/datasets.git", rev = "004a5bf4addd9293d6d40f43360c03c8f7e42b28" }
-```
+| File | Reason |
+|------|--------|
+| `scripts/visualization/` | Tobias's consumption pipeline demos |
+| `docs/brainstorming/` | Context documentation |
+| `docs/specs/` | These integration specs |
+| `.gitmodules` | Tobias's HF space submodule link |
+| `README.md` | Target repo has different context/branding |
+| `CONTRIBUTING.md` | Target repo has existing contribution guidelines |
 
 ---
 
-## Execution Order
+## Files NOT Copied (intentional)
 
-1. **Phase 1**: `cp -r _reference_repos/bids-hub/src/bids_hub src/`
-2. **Phase 2**: Update `pyproject.toml` (detailed in next spec)
-3. **Phase 3**: `cp -r _reference_repos/bids-hub/tests .` (replace existing)
-4. **Phase 4**: `rm -rf src/neuroimaging_go_brrrr scripts/push_to_hub*.py scripts/download*.sh`
-5. **Phase 5**: `uv sync && uv run pytest && uv run bids-hub --help`
+| Source File | Reason NOT Copied |
+|-------------|-------------------|
+| `LICENSE` | Target repo already has license |
+| `README.md` | Target repo has different context/branding |
+| `CONTRIBUTING.md` | Target repo has existing contribution guidelines |
+| `GEMINI.md` | Gemini-specific context (not needed) |
+| `mypy.ini` | Merged into pyproject.toml [tool.mypy] |
+| `docs/` | Reference docs specific to standalone bids-hub repo |
+| `uv.lock` | Regenerated by `uv sync` |
+| `.markdownlint.yaml` | Not using markdown linting locally |
+
+**Note**: The reference `docs/` contains tutorials and API docs. These could be copied later if needed, but are not essential for the integration.
 
 ---
 
 ## Success Criteria
 
 ```bash
-# CLI works
-bids-hub --help
-bids-hub list
-bids-hub arc --help
-bids-hub isles24 --help
+# 1. CLI works
+uv run bids-hub --help
+uv run bids-hub list
+uv run bids-hub arc --help
+uv run bids-hub isles24 --help
 
-# Tests pass
+# 2. All tests pass
 uv run pytest -v
 
-# Imports work
-python -c "from bids_hub import build_and_push_arc, ValidationResult"
+# 3. Imports work
+python -c "from bids_hub import build_and_push_arc, ValidationResult; print('OK')"
+
+# 4. Linting passes
+uv run ruff check src/ tests/
+uv run mypy src/
+
+# 5. Download scripts work
+./scripts/download_arc.sh --help  # Should show usage
+./scripts/download_isles24.sh --help  # Should show usage
+```
+
+---
+
+## Quick Reference (All Commands)
+
+```bash
+# Phase 1: Copy source + docs (NOT CONTRIBUTING.md - keep target's)
+cp -r _reference_repos/bids-hub/src/bids_hub src/
+cp _reference_repos/bids-hub/CLAUDE.md .
+cp _reference_repos/bids-hub/UPSTREAM_BUG.md .
+cp _reference_repos/bids-hub/CITATION.cff .
+cp _reference_repos/bids-hub/CHANGELOG.md .
+
+# Phase 2: Replace pyproject.toml (see spec for full content)
+
+# Phase 2b: Merge configs (see spec for details)
+
+# Phase 3: Copy tests
+rm -rf tests/ && cp -r _reference_repos/bids-hub/tests .
+
+# Phase 4: Delete obsolete + copy scripts
+rm -rf src/neuroimaging_go_brrrr/
+rm scripts/push_to_hub_ds004884_full.py scripts/download_ds004884.sh
+cp _reference_repos/bids-hub/scripts/download_arc.sh scripts/
+cp _reference_repos/bids-hub/scripts/download_isles24.sh scripts/
+chmod +x scripts/download_*.sh
+
+# Phase 5: Verify
+uv sync --all-extras && uv run pytest -v && uv run bids-hub --help
 ```

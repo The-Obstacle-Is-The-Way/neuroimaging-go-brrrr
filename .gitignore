@@ -14,3 +14,17 @@ __pycache__/
 .ruff_cache/
 .coverage
 htmlcov/
+
+# ============================================
+# Neuroimaging / BIDS / NIfTI specific
+# ============================================
+data/
+openneuro/
+ds*/
+*.nii
+*.nii.gz
+*.pt
+*.npz
+
+# HuggingFace cache
+.cache/huggingface/

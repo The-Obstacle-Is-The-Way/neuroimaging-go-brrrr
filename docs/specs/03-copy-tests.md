@@ -8,7 +8,8 @@
 
 ```
 tests/
-└── __init__.py  # Probably empty
+├── conftest.py      # Empty
+└── test_smoke.py    # Basic smoke test (504 bytes) - will be replaced
 ```
 
 ## Source tests/ from bids-hub
