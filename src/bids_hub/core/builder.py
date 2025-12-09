@@ -216,6 +216,7 @@ def push_dataset_to_hub(
                     path_in_repo=f"data/{shard_fname}",
                     repo_id=config.hf_repo_id,
                     repo_type="dataset",
+                    revision=revision,
                     commit_message=f"Upload shard {i + 1}/{num_shards}",
                 )
             except Exception:
@@ -241,6 +242,7 @@ def push_dataset_to_hub(
                 path_in_repo="dataset_info.json",
                 repo_id=config.hf_repo_id,
                 repo_type="dataset",
+                revision=revision,
                 commit_message="Upload dataset metadata",
             )
         else:
