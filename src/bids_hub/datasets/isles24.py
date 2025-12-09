@@ -54,9 +54,7 @@ from ..core.utils import find_single_nifti
 logger = logging.getLogger(__name__)
 
 
-def _load_phenotype_data(
-    phenotype_dir: Path, subject_id: str
-) -> tuple[dict[str, Any], int, int]:
+def _load_phenotype_data(phenotype_dir: Path, subject_id: str) -> tuple[dict[str, Any], int, int]:
     """
     Load phenotype data for a subject from the phenotype directory.
 
@@ -218,9 +216,7 @@ def build_isles24_file_table(bids_root: Path) -> pd.DataFrame:
         lesion_mask = find_single_nifti(ses02_deriv, "*_space-ncct_lesion-msk.nii.gz")
 
         # --- METADATA ---
-        meta, pheno_attempted, pheno_failed = _load_phenotype_data(
-            phenotype_root, subject_id
-        )
+        meta, pheno_attempted, pheno_failed = _load_phenotype_data(phenotype_root, subject_id)
         total_pheno_files_attempted += pheno_attempted
         total_pheno_files_failed += pheno_failed
 
