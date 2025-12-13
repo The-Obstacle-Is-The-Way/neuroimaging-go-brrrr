@@ -30,26 +30,47 @@ if missing:
 ```python
 from pathlib import Path
 
-for col in ["t1w", "bold", "dwi"]:  # your NIfTI columns
+single_file_cols = ["t1w", "t2w", "flair", "lesion"]
+multi_run_cols = ["bold", "dwi", "sbref"]
+
+for col in single_file_cols:
     for path in file_table[col].dropna():
-        if not Path(path).is_absolute():
+        p = Path(path)
+        if not p.is_absolute():
             raise ValueError(f"Relative path found: {path}")
-        if not Path(path).exists():
+        if not p.exists():
             raise ValueError(f"File not found: {path}")
+
+for col in multi_run_cols:
+    for paths in file_table[col]:
+        for path in paths:
+            p = Path(path)
+            if not p.is_absolute():
+                raise ValueError(f"Relative path found: {path}")
+            if not p.exists():
+                raise ValueError(f"File not found: {path}")
 ```
 
 ### 3. Verify Non-Null Counts
 
 ```python
-print("Non-null counts:")
-print(file_table.notna().sum())
+print("Non-null counts (single-file columns):")
+print(file_table[["t1w", "t2w", "flair", "lesion"]].notna().sum())
 
-# Example output:
-# subject_id    902
-# session_id    902
-# t1w           447
-# bold          850
-# dwi           613
+print("Run counts (multi-run columns):")
+for col in ["bold", "dwi", "sbref"]:
+    num_sessions = (file_table[col].apply(len) > 0).sum()
+    num_runs = file_table[col].apply(len).sum()
+    print(f"{col}: {num_sessions} sessions, {num_runs} runs")
+
+# Example output (ARC ds004884):
+# t1w      441
+# t2w      439
+# flair    231
+# lesion   228
+# bold: 850 sessions, 1402 runs
+# dwi: 613 sessions, 2089 runs
+# sbref: 88 sessions, 322 runs
 ```
 
 ### 4. Test Local Loading

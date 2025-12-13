@@ -28,11 +28,12 @@ Multimodal neuroimaging dataset of 230 chronic stroke patients with aphasia.
 
 | Modality | Count | Description |
 |----------|-------|-------------|
-| T1w | 441 | T1-weighted structural MRI |
-| T2w | 447 | T2-weighted structural MRI |
-| FLAIR | 235 | Fluid-attenuated inversion recovery |
-| BOLD | 850 | Functional MRI |
-| DWI | 613 | Diffusion-weighted imaging |
+| T1w | 441 | T1-weighted structural MRI (unambiguous sessions) |
+| T2w | 439 | T2-weighted structural MRI (unambiguous sessions) |
+| FLAIR | 231 | Fluid-attenuated inversion recovery (unambiguous sessions) |
+| BOLD | 850 | Functional MRI sessions (1,402 runs) |
+| DWI | 613 | Diffusion-weighted imaging sessions (2,089 runs) |
+| SBRef | 88 | Single-band reference sessions (322 runs) |
 | Lesion Masks | 228 | Expert-drawn stroke lesion segmentations |
 
 ## Usage
