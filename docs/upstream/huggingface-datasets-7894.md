@@ -34,7 +34,7 @@ fresh_shard = fresh_shard.cast(ds.features)
 **Dependency pin:** `pyproject.toml` pins `datasets` to a specific commit:
 ```toml
 [tool.uv.sources]
-datasets = { git = "https://github.com/huggingface/datasets.git", rev = "004a5bf..." }
+datasets = { git = "https://github.com/huggingface/datasets.git", rev = "0ec4d87..." }
 ```
 
 ---

@@ -194,7 +194,7 @@ def push_dataset_to_hub(
                 fresh_shard = fresh_shard.cast(ds.features)
 
                 # Now get the clean Arrow table
-                table = fresh_shard._data.table.combine_chunks()
+                table = fresh_shard.data.table.combine_chunks()
 
                 # Embed external files (NIfTIs) into the Arrow table
                 embedded_table = embed_table_storage(table)

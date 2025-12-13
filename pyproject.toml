@@ -99,7 +99,8 @@ warn_redundant_casts = true
 warn_unused_ignores = true
 
 [tool.uv.sources]
-# Pin to git main for Nifti() features not yet in PyPI stable.
-# Our workaround in builder.py handles embed_table_storage bug (PR #7896 still open).
+# Pin to a specific git commit (unreleased): PyPI `datasets` lacks `Nifti.embed_storage`,
+# which causes empty/0-byte embedded uploads. We also work around `embed_table_storage`
+# SIGKILL bug (#7894) in builder.py while upstream PR #7896 is still open.
 # Updated: 2025-12-12
 datasets = { git = "https://github.com/huggingface/datasets.git", rev = "0ec4d87dfe0a3545308a8c69459b5ed9aff440fb" }

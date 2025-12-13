@@ -98,7 +98,7 @@ The stable PyPI release has bugs with `Nifti.embed_storage`. We pin to a specifi
 
 ```toml
 [tool.uv.sources]
-datasets = { git = "https://github.com/huggingface/datasets.git", rev = "004a5bf4..." }
+datasets = { git = "https://github.com/huggingface/datasets.git", rev = "0ec4d87d..." }
 ```
 
 See [Why Uploads Fail](why-uploads-fail.md) for details.
