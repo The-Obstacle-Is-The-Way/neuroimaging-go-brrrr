@@ -1,12 +1,12 @@
 cff-version: 1.2.0
-title: bids-hub
+title: neuroimaging-go-brrrr
 message: >-
   If you use datasets uploaded through this package, please cite both the
   original dataset publications and this software.
 type: software
 authors:
   - name: The Obstacle Is The Way
-repository-code: https://github.com/The-Obstacle-Is-The-Way/bids-hub
+repository-code: https://github.com/The-Obstacle-Is-The-Way/neuroimaging-go-brrrr
 license: Apache-2.0
 preferred-citation:
   type: article

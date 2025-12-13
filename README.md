@@ -99,6 +99,14 @@ If you use the ARC dataset, please cite:
 
 > Gibson M, Newman-Norlund R, Bonilha L, Fridriksson J, Hickok G, Hillis AE, den Ouden DB, Rorden C. Aphasia Recovery Cohort (ARC). OpenNeuro [dataset]. 2023. doi:[10.18112/openneuro.ds004884.v1.0.1](https://doi.org/10.18112/openneuro.ds004884.v1.0.1).
 
+## Roadmap
+
+| Priority | Task | Status |
+|----------|------|--------|
+| 1 | Add `t2w_acquisition` field to ARC schema | [PR #13](https://github.com/The-Obstacle-Is-The-Way/neuroimaging-go-brrrr/pull/13) |
+| 2 | Monitor upstream `datasets` PR #7896 | Tracking |
+| 3 | Add ATLAS v2.0 dataset support | Planned |
+
 ## References
 
 - [HuggingFace Datasets - NIfTI](https://huggingface.co/docs/datasets/nifti_dataset)

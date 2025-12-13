@@ -45,5 +45,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Full ARC schema: T1w, T2w, FLAIR, BOLD (multi-run), DWI (multi-run), sbref, lesion masks
 - Clinical metadata: age_at_stroke, sex, wab_aq, wab_type
 
-[0.2.0]: https://github.com/The-Obstacle-Is-The-Way/bids-hub/compare/v0.1.0...v0.2.0
-[0.1.0]: https://github.com/The-Obstacle-Is-The-Way/bids-hub/releases/tag/v0.1.0
+[0.2.0]: https://github.com/The-Obstacle-Is-The-Way/neuroimaging-go-brrrr/compare/v0.1.0...v0.2.0
+[0.1.0]: https://github.com/The-Obstacle-Is-The-Way/neuroimaging-go-brrrr/releases/tag/v0.1.0
