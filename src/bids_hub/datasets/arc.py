@@ -251,6 +251,7 @@ def get_arc_features() -> Features:
         - session_id: BIDS session identifier (e.g., "ses-1")
         - t1w: T1-weighted structural MRI (Nifti, single file)
         - t2w: T2-weighted structural MRI (Nifti, nullable, single file)
+        - t2w_acquisition: T2w acquisition type (space_2x, space_no_accel, turbo_spin_echo)
         - flair: FLAIR structural MRI (Nifti, nullable, single file)
         - bold: BOLD fMRI 4D time-series (Sequence of Nifti, supports multiple runs)
         - dwi: Diffusion-weighted imaging (Sequence of Nifti, supports multiple runs)
