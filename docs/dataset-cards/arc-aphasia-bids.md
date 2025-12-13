@@ -57,7 +57,8 @@ space_only = ds.filter(
         and x["t2w_acquisition"] in ("space_2x", "space_no_accel")
     )
 )
-# Returns SPACE samples with lesion masks (excludes TSE and ambiguous multi-T2w sessions)
+# Returns 222 SPACE samples (115 space_2x + 107 space_no_accel)
+# Excludes: 5 TSE samples, 1 multi-T2w session (sub-M2105/ses-964)
 ```
 
 ## Citation
