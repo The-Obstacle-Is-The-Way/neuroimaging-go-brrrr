@@ -429,6 +429,23 @@ class TestBuildArcFileTableAcquisition:
         sub2 = df[(df["subject_id"] == "sub-M2002") & (df["session_id"] == "ses-1")].iloc[0]
         assert sub2["t2w_acquisition"] is None
 
+    def test_multi_t2w_session_sets_t2w_none(self, synthetic_bids_root: Path) -> None:
+        """Verify sessions with multiple T2w files are treated as ambiguous (t2w=None).
+
+        When a session contains multiple T2w files, find_single_nifti returns None
+        to avoid ambiguity. Consequently, t2w_acquisition should also be None.
+        """
+        # Add a second T2w to an existing session to force ambiguity
+        anat_dir = synthetic_bids_root / "sub-M2001" / "ses-1" / "anat"
+        _create_minimal_nifti(anat_dir / "sub-M2001_ses-1_acq-spc3_T2w.nii.gz")
+
+        df = build_arc_file_table(synthetic_bids_root)
+        ses1 = df[(df["subject_id"] == "sub-M2001") & (df["session_id"] == "ses-1")].iloc[0]
+
+        # With two T2w files, both t2w and t2w_acquisition should be None
+        assert ses1["t2w"] is None
+        assert ses1["t2w_acquisition"] is None
+
 
 class TestGetArcFeaturesAcquisition:
     """Tests for t2w_acquisition in Features schema."""

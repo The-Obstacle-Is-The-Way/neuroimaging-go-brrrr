@@ -154,7 +154,7 @@ Get the HuggingFace Features schema for ARC.
 from bids_hub import get_arc_features
 
 features = get_arc_features()
-# Returns Features with 13 columns (7 imaging, 4 demographic, 2 identifiers)
+# Returns Features with 14 columns (7 imaging, 1 acquisition type, 4 demographic, 2 identifiers)
 ```
 
 **Returns:** `datasets.Features`
