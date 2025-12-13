@@ -42,7 +42,9 @@ for col in single_file_cols:
             raise ValueError(f"File not found: {path}")
 
 for col in multi_run_cols:
-    for paths in file_table[col]:
+    for paths in file_table[col].dropna():
+        if not paths:
+            continue
         for path in paths:
             p = Path(path)
             if not p.is_absolute():
@@ -55,10 +57,10 @@ for col in multi_run_cols:
 
 ```python
 print("Non-null counts (single-file columns):")
-print(file_table[["t1w", "t2w", "flair", "lesion"]].notna().sum())
+print(file_table[single_file_cols].notna().sum())
 
 print("Run counts (multi-run columns):")
-for col in ["bold", "dwi", "sbref"]:
+for col in multi_run_cols:
     num_sessions = (file_table[col].apply(len) > 0).sum()
     num_runs = file_table[col].apply(len).sum()
     print(f"{col}: {num_sessions} sessions, {num_runs} runs")

@@ -37,7 +37,7 @@ ATLAS v2.0 requires a **Data Use Agreement (DUA)** through ICPSR. We **cannot** 
 ### Why NOT Public Upload?
 
 From [ICPSR](https://www.icpsr.umich.edu/web/ICPSR/studies/36684):
-> "To access this data collection, you need to download and complete the data use agreement and email it to icpsr-addep@umich.edu."
+> "To access this data collection, you need to download and complete the data use agreement and email it to [icpsr-addep@umich.edu](mailto:icpsr-addep@umich.edu)."
 
 **Redistribution is prohibited** without explicit permission. Creating a public HuggingFace dataset would violate the DUA.
 
@@ -86,7 +86,7 @@ def get_atlas_features() -> Features:
 
 ### Directory Structure
 
-```
+```text
 ATLAS_R2.0/
 ├── Training/
 │   └── R001/                              # Site ID
@@ -101,7 +101,7 @@ ATLAS_R2.0/
 
 ### Files to Create
 
-```
+```text
 src/bids_hub/datasets/atlas.py          # Dataset module
 src/bids_hub/validation/atlas.py        # Validation rules
 scripts/download_atlas.sh               # Instructions (NOT auto-download)
