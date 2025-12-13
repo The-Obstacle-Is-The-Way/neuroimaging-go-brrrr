@@ -78,18 +78,19 @@ HuggingFace Hub
 
 ```python
 Features({
-    "subject_id": Value("string"),    # e.g., "sub-M2001"
-    "session_id": Value("string"),    # e.g., "ses-1"
-    "t1w": Nifti(),                   # T1-weighted structural
-    "t2w": Nifti(),                   # T2-weighted structural
-    "flair": Nifti(),                 # FLAIR structural
-    "bold": Sequence(Nifti()),        # fMRI 4D time-series (list of runs)
-    "dwi": Sequence(Nifti()),         # Diffusion-weighted (list of runs)
-    "sbref": Sequence(Nifti()),       # Single-band reference (list of runs)
-    "lesion": Nifti(),                # Expert lesion mask
+    "subject_id": Value("string"),        # e.g., "sub-M2001"
+    "session_id": Value("string"),        # e.g., "ses-1"
+    "t1w": Nifti(),                       # T1-weighted structural
+    "t2w": Nifti(),                       # T2-weighted structural
+    "t2w_acquisition": Value("string"),   # Acquisition type: space_2x, space_no_accel, turbo_spin_echo
+    "flair": Nifti(),                     # FLAIR structural
+    "bold": Sequence(Nifti()),            # fMRI 4D time-series (list of runs)
+    "dwi": Sequence(Nifti()),             # Diffusion-weighted (list of runs)
+    "sbref": Sequence(Nifti()),           # Single-band reference (list of runs)
+    "lesion": Nifti(),                    # Expert lesion mask
     "age_at_stroke": Value("float32"),
     "sex": Value("string"),
-    "wab_aq": Value("float32"),       # Aphasia severity score
+    "wab_aq": Value("float32"),           # Aphasia severity score
     "wab_type": Value("string"),
 })
 ```

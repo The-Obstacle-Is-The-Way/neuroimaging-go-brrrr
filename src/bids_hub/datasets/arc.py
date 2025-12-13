@@ -26,6 +26,7 @@ The ARC dataset contains:
 from __future__ import annotations
 
 import logging
+import re
 from pathlib import Path
 
 import pandas as pd
@@ -35,6 +36,43 @@ from ..core import DatasetBuilderConfig, build_hf_dataset, push_dataset_to_hub
 from ..core.utils import find_all_niftis, find_single_nifti
 
 logger = logging.getLogger(__name__)
+
+
+# ARC acquisition type mapping (exact match, not substring)
+_ARC_ACQUISITION_MAP: dict[str, str] = {
+    "spc3p2": "space_2x",  # SPACE with 2x acceleration
+    "spc3": "space_no_accel",  # SPACE without acceleration
+    "tse3": "turbo_spin_echo",  # Turbo Spin Echo
+}
+
+
+def _extract_acquisition_type(filepath: str | None) -> str | None:
+    """
+    Extract acquisition type from BIDS filename.
+
+    BIDS filenames contain acq-<label> entity that indicates the acquisition type.
+    For ARC T2w images, we map known codes to human-readable names.
+
+    Args:
+        filepath: Path to NIfTI file (may be None)
+
+    Returns:
+        - Known code: mapped name (e.g., "spc3p2" -> "space_2x")
+        - Unknown code: raw label (forward compatible)
+        - No acq-* entity or None input: None
+    """
+    if filepath is None:
+        return None
+
+    match = re.search(r"acq-([a-z0-9]+)", str(filepath).lower())
+    if not match:
+        return None
+
+    acq_label = match.group(1)
+
+    # Use exact match mapping (not substring) to avoid mismapping
+    # e.g., "spc3foo" should return "spc3foo", not "space_no_accel"
+    return _ARC_ACQUISITION_MAP.get(acq_label, acq_label)
 
 
 def build_arc_file_table(bids_root: Path) -> pd.DataFrame:
@@ -63,6 +101,7 @@ def build_arc_file_table(bids_root: Path) -> pd.DataFrame:
             - session_id (str): BIDS session identifier (e.g., "ses-1")
             - t1w (str | None): Absolute path to T1-weighted NIfTI
             - t2w (str | None): Absolute path to T2-weighted NIfTI
+            - t2w_acquisition (str | None): Acquisition type for T2w (e.g., "space_2x")
             - flair (str | None): Absolute path to FLAIR NIfTI
             - bold (list[str]): List of absolute paths to ALL BOLD runs
             - dwi (list[str]): List of absolute paths to ALL DWI runs
@@ -144,6 +183,7 @@ def build_arc_file_table(bids_root: Path) -> pd.DataFrame:
             # Find structural modalities in anat/ (single file per session)
             t1w_path = find_single_nifti(session_dir / "anat", "*_T1w.nii.gz")
             t2w_path = find_single_nifti(session_dir / "anat", "*_T2w.nii.gz")
+            t2w_acquisition = _extract_acquisition_type(t2w_path)
             flair_path = find_single_nifti(session_dir / "anat", "*_FLAIR.nii.gz")
 
             # Find functional modalities in func/ (ALL runs)
@@ -166,6 +206,7 @@ def build_arc_file_table(bids_root: Path) -> pd.DataFrame:
                     "session_id": session_id,
                     "t1w": t1w_path,
                     "t2w": t2w_path,
+                    "t2w_acquisition": t2w_acquisition,
                     "flair": flair_path,
                     "bold": bold_paths,  # List of paths (all runs)
                     "dwi": dwi_paths,  # List of paths (all runs)
@@ -230,6 +271,7 @@ def get_arc_features() -> Features:
             # Structural: single file per session
             "t1w": Nifti(),
             "t2w": Nifti(),
+            "t2w_acquisition": Value("string"),
             "flair": Nifti(),
             # Functional/Diffusion: multiple runs per session
             "bold": Sequence(Nifti()),

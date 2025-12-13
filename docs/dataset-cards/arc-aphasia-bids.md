@@ -33,7 +33,7 @@ Multimodal neuroimaging dataset of 230 chronic stroke patients with aphasia.
 | FLAIR | 235 | Fluid-attenuated inversion recovery |
 | BOLD | 850 | Functional MRI |
 | DWI | 613 | Diffusion-weighted imaging |
-| Lesion Masks | 230 | Expert-drawn stroke lesion segmentations |
+| Lesion Masks | 228 | Expert-drawn stroke lesion segmentations |
 
 ## Usage
 
@@ -47,6 +47,17 @@ example = ds[0]
 print(example["subject_id"])  # "sub-M2001"
 print(example["t1w"])         # NIfTI array
 print(example["wab_aq"])      # Aphasia severity score
+
+# Filter by T2w acquisition type (for paper replication)
+# See: https://arxiv.org/abs/2503.05531 (MeshNet paper)
+space_only = ds.filter(
+    lambda x: (
+        x["lesion"] is not None
+        and x["t2w"] is not None
+        and x["t2w_acquisition"] in ("space_2x", "space_no_accel")
+    )
+)
+# Returns 223 SPACE samples (excludes 5 TSE samples)
 ```
 
 ## Citation

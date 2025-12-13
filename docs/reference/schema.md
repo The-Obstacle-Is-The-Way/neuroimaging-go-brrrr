@@ -17,6 +17,7 @@ Features({
     # Structural imaging (single file per session)
     "t1w": Nifti(),
     "t2w": Nifti(),
+    "t2w_acquisition": Value("string"),  # space_2x, space_no_accel, turbo_spin_echo
     "flair": Nifti(),
 
     # Functional imaging (multi-run support)

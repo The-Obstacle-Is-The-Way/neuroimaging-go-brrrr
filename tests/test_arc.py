@@ -20,6 +20,7 @@ from bids_hub import (
     get_arc_features,
 )
 from bids_hub.core import DatasetBuilderConfig
+from bids_hub.datasets.arc import _extract_acquisition_type
 
 
 def _create_minimal_nifti(path: Path) -> None:
@@ -41,7 +42,7 @@ def synthetic_bids_root() -> Generator[Path, None, None]:
         │   ├── ses-1/
         │   │   ├── anat/
         │   │   │   ├── sub-M2001_ses-1_T1w.nii.gz
-        │   │   │   ├── sub-M2001_ses-1_T2w.nii.gz
+        │   │   │   ├── sub-M2001_ses-1_acq-spc3p2_T2w.nii.gz
         │   │   │   └── sub-M2001_ses-1_FLAIR.nii.gz
         │   │   ├── func/
         │   │   │   └── sub-M2001_ses-1_task-rest_bold.nii.gz
@@ -51,7 +52,7 @@ def synthetic_bids_root() -> Generator[Path, None, None]:
         │   └── ses-2/
         │       └── anat/
         │           ├── sub-M2001_ses-2_T1w.nii.gz
-        │           └── sub-M2001_ses-2_T2w.nii.gz  (no FLAIR, no func, no dwi)
+        │           └── sub-M2001_ses-2_acq-tse3_T2w.nii.gz  (no FLAIR, no func, no dwi)
         ├── sub-M2002/
         │   └── ses-1/
         │       └── anat/
@@ -84,7 +85,9 @@ def synthetic_bids_root() -> Generator[Path, None, None]:
 
         # sub-M2001 ses-1: FULL modalities (anat + func + dwi) with MULTIPLE RUNS
         _create_minimal_nifti(root / "sub-M2001" / "ses-1" / "anat" / "sub-M2001_ses-1_T1w.nii.gz")
-        _create_minimal_nifti(root / "sub-M2001" / "ses-1" / "anat" / "sub-M2001_ses-1_T2w.nii.gz")
+        _create_minimal_nifti(
+            root / "sub-M2001" / "ses-1" / "anat" / "sub-M2001_ses-1_acq-spc3p2_T2w.nii.gz"
+        )
         _create_minimal_nifti(
             root / "sub-M2001" / "ses-1" / "anat" / "sub-M2001_ses-1_FLAIR.nii.gz"
         )
@@ -110,7 +113,9 @@ def synthetic_bids_root() -> Generator[Path, None, None]:
 
         # sub-M2001 ses-2: has T1w and T2w only (no FLAIR, no func, no dwi)
         _create_minimal_nifti(root / "sub-M2001" / "ses-2" / "anat" / "sub-M2001_ses-2_T1w.nii.gz")
-        _create_minimal_nifti(root / "sub-M2001" / "ses-2" / "anat" / "sub-M2001_ses-2_T2w.nii.gz")
+        _create_minimal_nifti(
+            root / "sub-M2001" / "ses-2" / "anat" / "sub-M2001_ses-2_acq-tse3_T2w.nii.gz"
+        )
 
         # sub-M2002 ses-1: has T1w only (minimal)
         _create_minimal_nifti(root / "sub-M2002" / "ses-1" / "anat" / "sub-M2002_ses-1_T1w.nii.gz")
@@ -166,6 +171,7 @@ class TestBuildArcFileTable:
             "session_id",
             "t1w",
             "t2w",
+            "t2w_acquisition",
             "flair",
             "bold",
             "dwi",
@@ -346,3 +352,92 @@ class TestBuildAndPushArc:
             mock_build.return_value = MagicMock()
             build_and_push_arc(config)
             mock_push.assert_not_called()
+
+
+class TestExtractAcquisitionType:
+    """Tests for _extract_acquisition_type helper function."""
+
+    def test_space_2x(self) -> None:
+        """Test extraction of SPACE 2x acceleration."""
+        result = _extract_acquisition_type("/data/sub-M2005_ses-4334_acq-spc3p2_run-7_T2w.nii.gz")
+        assert result == "space_2x"
+
+    def test_space_no_accel(self) -> None:
+        """Test extraction of SPACE no acceleration."""
+        result = _extract_acquisition_type("/data/sub-M2001_ses-1253_acq-spc3_run-3_T2w.nii.gz")
+        assert result == "space_no_accel"
+
+    def test_turbo_spin_echo(self) -> None:
+        """Test extraction of Turbo Spin Echo."""
+        result = _extract_acquisition_type("/data/sub-M2002_ses-1441_acq-tse3_run-4_T2w.nii.gz")
+        assert result == "turbo_spin_echo"
+
+    def test_no_acq_entity_returns_none(self) -> None:
+        """Test that filenames without acq-* return None."""
+        result = _extract_acquisition_type("/data/sub-M2001_ses-1_T2w.nii.gz")
+        assert result is None
+
+    def test_none_input_returns_none(self) -> None:
+        """Test that None input returns None."""
+        assert _extract_acquisition_type(None) is None
+
+    def test_unknown_code_returns_raw_label(self) -> None:
+        """Test that unknown codes return the raw label (forward compat)."""
+        result = _extract_acquisition_type("/data/sub-M2001_ses-1_acq-newseq_T2w.nii.gz")
+        assert result == "newseq"
+
+    def test_exact_match_not_substring(self) -> None:
+        """Test that mapping uses exact match, not substring.
+
+        Critical: 'spc3foo' should NOT map to 'space_no_accel'.
+        It should return 'spc3foo' (raw label).
+        """
+        result = _extract_acquisition_type("/data/sub-M2001_ses-1_acq-spc3foo_T2w.nii.gz")
+        assert result == "spc3foo"  # NOT "space_no_accel"
+
+    def test_case_insensitive(self) -> None:
+        """Test that extraction is case-insensitive."""
+        result = _extract_acquisition_type("/DATA/SUB-M2001_SES-1_ACQ-SPC3P2_T2W.NII.GZ")
+        assert result == "space_2x"
+
+
+class TestBuildArcFileTableAcquisition:
+    """Tests for t2w_acquisition column in file table."""
+
+    def test_acquisition_column_exists(self, synthetic_bids_root: Path) -> None:
+        """Verify t2w_acquisition column is present."""
+        df = build_arc_file_table(synthetic_bids_root)
+        assert "t2w_acquisition" in df.columns
+
+    def test_acquisition_populated_correctly(self, synthetic_bids_root: Path) -> None:
+        """Verify acquisition values are correctly populated."""
+        df = build_arc_file_table(synthetic_bids_root)
+
+        # sub-M2001 ses-1 should have space_2x (acq-spc3p2)
+        ses1 = df[(df["subject_id"] == "sub-M2001") & (df["session_id"] == "ses-1")].iloc[0]
+        assert ses1["t2w_acquisition"] == "space_2x"
+
+        # sub-M2001 ses-2 should have turbo_spin_echo (acq-tse3)
+        ses2 = df[(df["subject_id"] == "sub-M2001") & (df["session_id"] == "ses-2")].iloc[0]
+        assert ses2["t2w_acquisition"] == "turbo_spin_echo"
+
+    def test_acquisition_none_when_no_t2w(self, synthetic_bids_root: Path) -> None:
+        """Verify acquisition is None when T2w is missing."""
+        df = build_arc_file_table(synthetic_bids_root)
+
+        # sub-M2002 ses-1 has no T2w
+        sub2 = df[(df["subject_id"] == "sub-M2002") & (df["session_id"] == "ses-1")].iloc[0]
+        assert sub2["t2w_acquisition"] is None
+
+
+class TestGetArcFeaturesAcquisition:
+    """Tests for t2w_acquisition in Features schema."""
+
+    def test_acquisition_in_schema(self) -> None:
+        """Verify t2w_acquisition is in the Features schema."""
+        from datasets import Value
+
+        features = get_arc_features()
+
+        assert "t2w_acquisition" in features
+        assert isinstance(features["t2w_acquisition"], Value)
