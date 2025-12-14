@@ -677,43 +677,36 @@ The ARC schema changes in this spec (BOLD task split + new columns) affect these
 
 ---
 
-## Separate Issue: Validation Expected Counts
+## Validation Expected Counts
 
-**IMPORTANT:** This spec does NOT fix validation, but documents the current SSOT mismatch so the "validate then upload" workflow is not misleading.
+**Status:** ✅ FIXED (commit `0b3ec8b`)
 
-### What fails today (first-principles, pinned OpenNeuro data)
+The validator now passes on valid SSOT data. Fixes applied:
 
-Running `uv run bids-hub arc validate <ds004884>` against the SSOT dataset currently fails on:
+1. **Updated expected counts** to match session-counting semantics:
+   - T1w: 447 → 444 (sessions with T1w)
+   - T2w: 447 → 440 (sessions with T2w, 1 session has 2 files)
+   - FLAIR: 235 → 233 (sessions with FLAIR, 2 sessions have 2 files)
+   - Lesion: 230 → 228 (verified in derivatives)
 
-| Check | Expected (src/bids_hub/validation/arc.py) | Actual (SSOT) | Root Cause |
-|------:|------------------------------------------:|--------------:|-----------|
-| `t2w_count` | 447 | 440 | Expected counts are not aligned with the validator’s session-counting semantics |
-| `flair_count` | 235 | 233 | Same as above (session-counting vs expected values) |
-| `lesion_count` | 230 | 0 | Lesion masks live under `derivatives/`, but validation only scans `sub-*/ses-*` |
+2. **Added custom check** for lesion masks in `derivatives/lesion_masks/`
 
-Separately, the SSOT dataset contains **228** lesion mask NIfTIs in `derivatives/lesion_masks`, not 230:
-`find derivatives/lesion_masks -name '*_desc-lesion_mask.nii.gz' | wc -l  # 228`
-
-**Impact:** `uv run bids-hub arc validate` currently fails on valid SSOT data, and `docs/tutorials/upload-arc.md` is misleading until validation is fixed.
-
-**Recommendation (separate PR):**
-- Update validation to count lesion masks in `derivatives/lesion_masks/...` (not under raw `sub-*/ses-*`)
-- Align expected counts with the validator’s counting semantics (sessions vs raw file counts)
-- Update the ARC upload tutorial to match the corrected validator behavior
-
-Do NOT block metadata parity on the validation fix.
+```bash
+$ uv run bids-hub arc validate /path/to/ds004884
+✅ All validations passed! Data is ready for HF push.
+```
 
 ---
 
 ## Post-Implementation Checklist
 
-- [ ] All tests pass
-- [ ] Type checking passes
-- [ ] Linting passes
-- [ ] Dry-run build succeeds against local OpenNeuro data
-- [ ] Update documentation files listed above
-- [ ] Update `ARC_METADATA_PARITY_AUDIT.md` to mark items complete
-- [ ] Update `CLAUDE.md` with new schema
+- [x] All tests pass (97 tests)
+- [x] Type checking passes (mypy)
+- [x] Linting passes (ruff)
+- [x] Dry-run build succeeds against local OpenNeuro data
+- [x] Update documentation files listed above
+- [x] Update `CLAUDE.md` with new schema
+- [x] Validation passes on SSOT data
 - [ ] Update HuggingFace dataset card with new columns
 - [ ] Rebuild and push to HuggingFace Hub
 - [ ] Verify new columns appear in HuggingFace dataset viewer
@@ -730,6 +723,11 @@ Do NOT block metadata parity on the validation fix.
 ---
 
 ## Changelog
+
+- **2025-12-14 (v6):** Fix validation to pass on SSOT data
+  - Updated expected counts to match session-counting semantics (T1w 444, T2w 440, FLAIR 233)
+  - Added custom check for lesion masks in `derivatives/lesion_masks/` (228 masks)
+  - Validation now passes: 12/12 checks ✓
 
 - **2025-12-14 (v5):** Make guardrails non-lossy + fix validation facts
   - Made BOLD task guardrail fail-fast (no silent dropping of unknown tasks)
