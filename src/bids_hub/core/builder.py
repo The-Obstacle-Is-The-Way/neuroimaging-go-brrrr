@@ -11,11 +11,19 @@ import pyarrow.parquet as pq
 from datasets import Dataset, Features
 from datasets.table import embed_table_storage
 from huggingface_hub import HfApi
+from huggingface_hub import constants as hf_constants
 from tqdm.auto import tqdm
 
 from .config import DatasetBuilderConfig
 
 logger = logging.getLogger(__name__)
+
+# WORKAROUND: HuggingFace Hub's default read timeout (10s) is too short for large
+# file uploads. When uploading large parquet shards (500-800MB), the server-side
+# dedup check can take longer than 10s to respond, causing ReadTimeout errors.
+# This increases the timeout to 5 minutes.
+# See: https://github.com/huggingface/datasets/issues/7400
+_HF_UPLOAD_TIMEOUT = 300  # 5 minutes
 
 
 def validate_file_table_columns(
@@ -165,92 +173,103 @@ def push_dataset_to_hub(
         f"Starting memory-efficient push to {config.hf_repo_id} with {num_shards} shards..."
     )
 
-    api = HfApi(token=token)
-    api.create_repo(config.hf_repo_id, repo_type="dataset", private=private, exist_ok=True)
+    # Apply timeout fix BEFORE creating HfApi (affects session creation)
+    # This prevents ReadTimeout during large file uploads when HF server is
+    # slow to respond during dedup checks.
+    original_timeout = hf_constants.DEFAULT_REQUEST_TIMEOUT
+    hf_constants.DEFAULT_REQUEST_TIMEOUT = _HF_UPLOAD_TIMEOUT
+    logger.info(f"Set HF request timeout to {_HF_UPLOAD_TIMEOUT}s (was {original_timeout}s)")
 
-    split_name = config.split if config.split else "train"
+    try:
+        api = HfApi(token=token)
+        api.create_repo(config.hf_repo_id, repo_type="dataset", private=private, exist_ok=True)
 
-    with tempfile.TemporaryDirectory() as tmpdir_root:
-        tmp_path = Path(tmpdir_root)
+        split_name = config.split if config.split else "train"
 
-        # 1. Upload Shards Sequentially
-        for i in tqdm(range(num_shards), desc="Uploading Shards"):
-            # Create the shard slice
-            shard = ds.shard(num_shards=num_shards, index=i, contiguous=True)
+        with tempfile.TemporaryDirectory() as tmpdir_root:
+            tmp_path = Path(tmpdir_root)
 
-            # Write shard to temporary Parquet file
-            shard_fname = f"{split_name}-{i:05d}-of-{num_shards:05d}.parquet"
-            local_parquet_path = tmp_path / shard_fname
+            # 1. Upload Shards Sequentially
+            for i in tqdm(range(num_shards), desc="Uploading Shards"):
+                # Create the shard slice
+                shard = ds.shard(num_shards=num_shards, index=i, contiguous=True)
 
-            if embed_external_files:
-                # WORKAROUND for huggingface/datasets#7894:
-                # ds.shard() creates Arrow table slices that crash embed_table_storage
-                # with SIGKILL on Sequence(Nifti()) columns. Converting to pandas and
-                # back breaks the problematic slice references.
-                # Remove this workaround when upstream PR #7896 is merged.
-                # See: https://github.com/huggingface/datasets/issues/7894
-                shard_df = shard.to_pandas()
-                fresh_shard = Dataset.from_pandas(shard_df, preserve_index=False)
-                fresh_shard = fresh_shard.cast(ds.features)
+                # Write shard to temporary Parquet file
+                shard_fname = f"{split_name}-{i:05d}-of-{num_shards:05d}.parquet"
+                local_parquet_path = tmp_path / shard_fname
 
-                # Now get the clean Arrow table
-                table = fresh_shard.data.table.combine_chunks()
+                if embed_external_files:
+                    # WORKAROUND for huggingface/datasets#7894:
+                    # ds.shard() creates Arrow table slices that crash embed_table_storage
+                    # with SIGKILL on Sequence(Nifti()) columns. Converting to pandas and
+                    # back breaks the problematic slice references.
+                    # Remove this workaround when upstream PR #7896 is merged.
+                    # See: https://github.com/huggingface/datasets/issues/7894
+                    shard_df = shard.to_pandas()
+                    fresh_shard = Dataset.from_pandas(shard_df, preserve_index=False)
+                    fresh_shard = fresh_shard.cast(ds.features)
 
-                # Embed external files (NIfTIs) into the Arrow table
-                embedded_table = embed_table_storage(table)
+                    # Now get the clean Arrow table
+                    table = fresh_shard.data.table.combine_chunks()
 
-                # Write embedded table directly with PyArrow
-                pq.write_table(embedded_table, str(local_parquet_path))
+                    # Embed external files (NIfTIs) into the Arrow table
+                    embedded_table = embed_table_storage(table)
 
-                # Clean up the intermediate objects
-                del fresh_shard, shard_df
-            else:
-                # No embedding needed, use standard parquet writer
-                shard.to_parquet(str(local_parquet_path))
+                    # Write embedded table directly with PyArrow
+                    pq.write_table(embedded_table, str(local_parquet_path))
 
-            # Upload the shard immediately using HfApi
-            # This streams the file from disk -> network, keeping RAM low.
-            try:
+                    # Clean up the intermediate objects
+                    del fresh_shard, shard_df
+                else:
+                    # No embedding needed, use standard parquet writer
+                    shard.to_parquet(str(local_parquet_path))
+
+                # Upload the shard immediately using HfApi
+                # This streams the file from disk -> network, keeping RAM low.
+                try:
+                    api.upload_file(
+                        path_or_fileobj=str(local_parquet_path),
+                        path_in_repo=f"data/{shard_fname}",
+                        repo_id=config.hf_repo_id,
+                        repo_type="dataset",
+                        revision=revision,
+                        commit_message=f"Upload shard {i + 1}/{num_shards}",
+                    )
+                except Exception:
+                    logger.exception("Failed to upload shard %d", i)
+                    raise
+
+                # Cleanup immediately to save disk space
+                local_parquet_path.unlink()
+
+                # Delete shard reference to allow garbage collection
+                del shard
+
+            # 2. Upload Metadata (dataset_info.json)
+            logger.info("Generating and uploading dataset info...")
+            ds.info.write_to_directory(str(tmp_path))
+
+            # 'write_to_directory' usually creates 'dataset_info.json'
+            # We check for it and upload it.
+            info_files = list(tmp_path.glob("dataset_info.json"))
+            if info_files:
                 api.upload_file(
-                    path_or_fileobj=str(local_parquet_path),
-                    path_in_repo=f"data/{shard_fname}",
+                    path_or_fileobj=str(info_files[0]),
+                    path_in_repo="dataset_info.json",
                     repo_id=config.hf_repo_id,
                     repo_type="dataset",
                     revision=revision,
-                    commit_message=f"Upload shard {i + 1}/{num_shards}",
+                    commit_message="Upload dataset metadata",
                 )
-            except Exception:
-                logger.exception("Failed to upload shard %d", i)
-                raise
+            else:
+                logger.warning(
+                    "dataset_info.json was not generated. The dataset may not load correctly. "
+                    "This can happen if the dataset has no features defined or is empty. "
+                    "To fix: ensure the dataset has rows and features are set via ds.cast(). "
+                    "You may need to manually upload a dataset_info.json file to the repository."
+                )
 
-            # Cleanup immediately to save disk space
-            local_parquet_path.unlink()
-
-            # Delete shard reference to allow garbage collection
-            del shard
-
-        # 2. Upload Metadata (dataset_info.json)
-        logger.info("Generating and uploading dataset info...")
-        ds.info.write_to_directory(str(tmp_path))
-
-        # 'write_to_directory' usually creates 'dataset_info.json'
-        # We check for it and upload it.
-        info_files = list(tmp_path.glob("dataset_info.json"))
-        if info_files:
-            api.upload_file(
-                path_or_fileobj=str(info_files[0]),
-                path_in_repo="dataset_info.json",
-                repo_id=config.hf_repo_id,
-                repo_type="dataset",
-                revision=revision,
-                commit_message="Upload dataset metadata",
-            )
-        else:
-            logger.warning(
-                "dataset_info.json was not generated. The dataset may not load correctly. "
-                "This can happen if the dataset has no features defined or is empty. "
-                "To fix: ensure the dataset has rows and features are set via ds.cast(). "
-                "You may need to manually upload a dataset_info.json file to the repository."
-            )
-
-    logger.info("Memory-efficient upload complete.")
+        logger.info("Memory-efficient upload complete.")
+    finally:
+        # Always restore original timeout, even on failure
+        hf_constants.DEFAULT_REQUEST_TIMEOUT = original_timeout

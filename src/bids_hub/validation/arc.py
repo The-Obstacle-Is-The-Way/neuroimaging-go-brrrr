@@ -228,28 +228,34 @@ def _check_nifti_loadable(ds: Dataset, sample_size: int = 5) -> HFValidationChec
     errors = []
     checked = 0
 
+    # Avoid decoding large list/NIfTI columns we don't need for this spot-check.
+    ds_view = ds.select_columns(["subject_id", "session_id", "t1w", "bold_naming40"])
+
     # Sample random rows
-    indices = random.sample(range(len(ds)), min(sample_size, len(ds)))
+    indices = random.sample(range(len(ds_view)), min(sample_size, len(ds_view)))
 
     for idx in indices:
-        row = ds[idx]
+        row = ds_view[idx]
+        row_id = f"{row['subject_id']}/{row['session_id']}"
         try:
             # Check T1w if present
             if row["t1w"] is not None:
                 shape = row["t1w"].shape
                 if len(shape) != 3:
-                    errors.append(f"Row {idx} t1w: unexpected shape {shape}")
+                    errors.append(f"Row {idx} ({row_id}) t1w: unexpected shape {shape}")
                 checked += 1
 
             # Check first BOLD run if present
             if row["bold_naming40"] and len(row["bold_naming40"]) > 0:
                 shape = row["bold_naming40"][0].shape
                 if len(shape) != 4:
-                    errors.append(f"Row {idx} bold_naming40[0]: unexpected shape {shape}")
+                    errors.append(
+                        f"Row {idx} ({row_id}) bold_naming40[0]: unexpected shape {shape}"
+                    )
                 checked += 1
 
         except Exception as e:
-            errors.append(f"Row {idx}: {e}")
+            errors.append(f"Row {idx} ({row_id}): {e}")
 
     if not errors:
         return HFValidationCheck(
@@ -325,7 +331,13 @@ def validate_arc_hf(
         result.add(check_total_list_items(ds, col, ARC_HF_EXPECTED_COUNTS[key]))
 
     # DWI gradient alignment
-    result.add(check_list_alignment(ds, ["dwi", "dwi_bvals", "dwi_bvecs"]))
+    result.add(
+        check_list_alignment(
+            ds,
+            ["dwi", "dwi_bvals", "dwi_bvecs"],
+            row_id_columns=["subject_id", "session_id"],
+        )
+    )
 
     # NIfTI loadability (optional, can be slow)
     if check_nifti:

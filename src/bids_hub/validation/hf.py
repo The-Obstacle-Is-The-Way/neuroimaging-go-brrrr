@@ -15,6 +15,9 @@ import logging
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
+import pyarrow as pa
+import pyarrow.compute as pc
+
 if TYPE_CHECKING:
     from datasets import Dataset
 
@@ -170,7 +173,8 @@ def check_unique_values(
     Returns:
         HFValidationCheck with pass/fail status.
     """
-    actual = len(set(ds[column]))
+    values = ds.data.table.column(column).combine_chunks()
+    actual = len(pc.unique(values))
     return HFValidationCheck(
         name=check_name or f"{column}_unique",
         expected=str(expected),
@@ -194,7 +198,8 @@ def check_non_null_count(
     Returns:
         HFValidationCheck with pass/fail status.
     """
-    non_null = sum(1 for val in ds[column] if val is not None)
+    col = ds.data.table.column(column)
+    non_null = len(col) - col.null_count
     return HFValidationCheck(
         name=f"{column}_non_null",
         expected=str(expected),
@@ -218,7 +223,10 @@ def check_list_sessions(
     Returns:
         HFValidationCheck with pass/fail status.
     """
-    sessions_with_data = sum(1 for val in ds[column] if val and len(val) > 0)
+    col = ds.data.table.column(column)
+    lengths = pc.fill_null(pc.list_value_length(col), 0)
+    has_data = pc.greater(lengths, 0)
+    sessions_with_data = pc.sum(pc.cast(has_data, pa.int64())).as_py() or 0
     return HFValidationCheck(
         name=f"{column}_sessions",
         expected=str(expected),
@@ -242,7 +250,9 @@ def check_total_list_items(
     Returns:
         HFValidationCheck with pass/fail status.
     """
-    total = sum(len(val) for val in ds[column] if val)
+    col = ds.data.table.column(column)
+    lengths = pc.fill_null(pc.list_value_length(col), 0)
+    total = pc.sum(lengths).as_py() or 0
     return HFValidationCheck(
         name=f"{column}_total",
         expected=str(expected),
@@ -254,6 +264,7 @@ def check_total_list_items(
 def check_list_alignment(
     ds: Dataset,
     columns: list[str],
+    row_id_columns: list[str] | None = None,
     sample_limit: int = 5,
 ) -> HFValidationCheck:
     """Verify multiple list columns have the same length per row.
@@ -263,20 +274,38 @@ def check_list_alignment(
     Args:
         ds: HuggingFace Dataset to check.
         columns: List of column names that should be aligned.
+        row_id_columns: Optional columns used to identify rows in error output
+            (e.g., ["subject_id", "session_id"]).
         sample_limit: Max number of misaligned rows to report.
 
     Returns:
         HFValidationCheck with pass/fail status.
     """
-    misaligned = []
-    for i in range(len(ds)):
-        row = ds[i]
-        lengths = [len(row[col]) if row[col] else 0 for col in columns]
+    table = ds.data.table
+    row_count = len(ds)
+    length_lists = []
+    for col_name in columns:
+        col = table.column(col_name)
+        lengths = pc.fill_null(pc.list_value_length(col), 0)
+        length_lists.append(lengths.to_pylist())
 
-        if len(set(lengths)) > 1:  # Not all same length
+    row_ids: dict[str, list[object]] = {}
+    if row_id_columns:
+        for col_name in row_id_columns:
+            if col_name in table.column_names:
+                row_ids[col_name] = table.column(col_name).to_pylist()
+
+    misaligned = []
+    for i in range(row_count):
+        lengths = [col_lengths[i] for col_lengths in length_lists]
+        if len(set(lengths)) > 1:
             pairs = zip(columns, lengths, strict=False)
             desc = ", ".join(f"{col}={ln}" for col, ln in pairs)
-            misaligned.append(f"Row {i}: {desc}")
+            if row_ids:
+                ids = ", ".join(f"{k}={row_ids[k][i]}" for k in row_ids)
+                misaligned.append(f"Row {i} ({ids}): {desc}")
+            else:
+                misaligned.append(f"Row {i}: {desc}")
             if len(misaligned) >= sample_limit:
                 break
 
