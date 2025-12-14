@@ -420,3 +420,8 @@ class TestPushDatasetToHub:
 
             # Verify upload_large_folder called (bulk upload instead of per-shard)
             mock_api_instance.upload_large_folder.assert_called_once()
+
+        # Clean up staging directory after test (since we no longer auto-delete)
+        # See BUG-004: We don't auto-delete to avoid race with HF retry logic
+        if staging_dir.exists():
+            shutil.rmtree(staging_dir)

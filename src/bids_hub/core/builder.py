@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import shutil
 from pathlib import Path
 
 import pandas as pd
@@ -261,14 +260,17 @@ def push_dataset_to_hub(
             revision=revision,
         )
 
-        logger.info("Upload complete! Cleaning up staging directory...")
-        # Clean up staging directory after successful upload
-        try:
-            shutil.rmtree(staging_dir)
-            logger.info(f"Staging directory removed: {staging_dir}")
-        except Exception as e:
-            logger.warning(f"Failed to remove staging directory {staging_dir}: {e}")
-            logger.warning("You may need to manually remove it.")
+        # NOTE: Do NOT auto-delete staging directory!
+        # upload_large_folder() may return before all retries complete.
+        # See BUG-004: Premature staging directory deletion during upload retries.
+        logger.info("=" * 60)
+        logger.info("Upload command completed!")
+        logger.info("")
+        logger.info("IMPORTANT: Verify upload before deleting staging directory:")
+        logger.info(f"  1. Check HuggingFace repo: https://huggingface.co/datasets/{config.hf_repo_id}")
+        logger.info(f"  2. Verify all {num_shards} shards are present")
+        logger.info(f"  3. Then manually delete: rm -rf {staging_dir.resolve()}")
+        logger.info("=" * 60)
 
     finally:
         # Always restore original timeout, even on failure
