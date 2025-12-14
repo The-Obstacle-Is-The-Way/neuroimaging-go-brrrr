@@ -182,6 +182,6 @@ for session in ds:
 - **NEW:** `wab_days` column (days since stroke when WAB administered)
 - **NEW:** `t2w_acquisition` column for T2w sequence type filtering
 
-### v1 (December 2024)
+### v1 (December 2025)
 
 - Initial release with 13 columns
