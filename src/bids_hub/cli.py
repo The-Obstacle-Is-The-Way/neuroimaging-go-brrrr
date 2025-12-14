@@ -28,7 +28,11 @@ import typer
 from .core import DatasetBuilderConfig
 from .datasets.arc import build_and_push_arc
 from .datasets.isles24 import build_and_push_isles24
-from .validation import validate_arc_download, validate_isles24_download
+from .validation import (
+    validate_arc_download,
+    validate_arc_hf_from_hub,
+    validate_isles24_download,
+)
 
 app = typer.Typer(
     name="bids-hub",
@@ -150,6 +154,65 @@ def validate_arc(
     typer.echo(result.summary())
 
     if not result.all_passed:
+        raise typer.Exit(code=1)
+
+
+@arc_app.command("validate-hf")
+def validate_arc_hf_cmd(
+    repo_id: str = typer.Option(
+        "hugging-science/arc-aphasia-bids",
+        "--repo",
+        "-r",
+        help="HuggingFace dataset repository ID.",
+    ),
+    split: str = typer.Option(
+        "train",
+        "--split",
+        "-s",
+        help="Dataset split to validate.",
+    ),
+    sample_size: int = typer.Option(
+        5,
+        "--sample-size",
+        "-n",
+        help="Number of NIfTI files to spot-check for integrity.",
+    ),
+    skip_nifti: bool = typer.Option(
+        False,
+        "--skip-nifti",
+        help="Skip NIfTI loadability checks (faster).",
+    ),
+) -> None:
+    """
+    Validate an ARC dataset downloaded from HuggingFace Hub.
+
+    Checks that the HF dataset matches SSOT (OpenNeuro ds004884):
+    - Schema has expected 19 columns
+    - Row count matches (902 sessions)
+    - Subject count matches (230 subjects)
+    - Modality counts match (T1w, T2w, FLAIR, BOLD, DWI, lesion, etc.)
+    - DWI gradients are aligned (dwi, bvals, bvecs same length)
+    - (Optional) Sample NIfTI files are loadable
+
+    Use this after loading the dataset to verify data integrity.
+
+    Example:
+        bids-hub arc validate-hf
+        bids-hub arc validate-hf --repo my-org/arc-copy --skip-nifti
+    """
+    typer.echo(f"Validating HuggingFace dataset: {repo_id} (split={split})")
+    typer.echo("Loading dataset from Hub (this may take a moment)...")
+
+    result = validate_arc_hf_from_hub(
+        repo_id=repo_id,
+        split=split,
+        nifti_sample_size=sample_size,
+        check_nifti=not skip_nifti,
+    )
+
+    typer.echo(result.summary())
+
+    if not result.passed:
         raise typer.Exit(code=1)
 
 

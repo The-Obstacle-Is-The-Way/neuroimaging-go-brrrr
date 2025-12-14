@@ -1,11 +1,17 @@
 """ARC dataset validation.
 
-Uses the generic validation framework with ARC-specific configuration.
+Provides validation for ARC datasets from both sources:
+- OpenNeuro (BIDS source): validate_arc_download()
+- HuggingFace (target): validate_arc_hf(), validate_arc_hf_from_hub()
+
+Uses the generic validation frameworks from base.py (BIDS) and hf.py (HuggingFace).
 """
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from .base import (
     DatasetValidationConfig,
@@ -14,6 +20,22 @@ from .base import (
     check_count,
     validate_dataset,
 )
+from .hf import (
+    HFValidationCheck,
+    HFValidationResult,
+    check_list_alignment,
+    check_list_sessions,
+    check_non_null_count,
+    check_row_count,
+    check_schema,
+    check_total_list_items,
+    check_unique_values,
+)
+
+if TYPE_CHECKING:
+    from datasets import Dataset
+
+logger = logging.getLogger(__name__)
 
 
 def _check_lesion_masks(bids_root: Path) -> ValidationCheck:
@@ -146,4 +168,197 @@ def validate_arc_download(
         run_bids_validator=run_bids_validator,
         nifti_sample_size=nifti_sample_size,
         tolerance=tolerance,
+    )
+
+
+# =============================================================================
+# ARC HuggingFace Validation
+# =============================================================================
+
+# ARC v2 schema: 19 columns (verified against OpenNeuro ds004884 SSOT)
+ARC_HF_EXPECTED_SCHEMA = [
+    "subject_id",
+    "session_id",
+    "t1w",
+    "t2w",
+    "t2w_acquisition",
+    "flair",
+    "bold_naming40",
+    "bold_rest",
+    "dwi",
+    "dwi_bvals",
+    "dwi_bvecs",
+    "sbref",
+    "lesion",
+    "age_at_stroke",
+    "sex",
+    "race",
+    "wab_aq",
+    "wab_days",
+    "wab_type",
+]
+
+# Expected counts for ARC v2 HuggingFace dataset
+# Verified against OpenNeuro ds004884 SSOT (2025-12-14)
+ARC_HF_EXPECTED_COUNTS = {
+    "rows": 902,  # Total sessions
+    "subjects": 230,  # Unique subjects
+    # Non-null counts for singleton modalities (after multi-run → None filtering)
+    "t1w_non_null": 441,
+    "t2w_non_null": 439,
+    "flair_non_null": 231,
+    "lesion_non_null": 228,
+    # Sessions with at least one run (list length > 0)
+    "bold_naming40_sessions": 750,
+    "bold_rest_sessions": 498,
+    "dwi_sessions": 613,
+    "sbref_sessions": 88,
+    # Total runs across all sessions
+    "bold_naming40_runs": 894,
+    "bold_rest_runs": 508,
+    "dwi_runs": 2089,
+    "sbref_runs": 322,
+}
+
+
+def _check_nifti_loadable(ds: Dataset, sample_size: int = 5) -> HFValidationCheck:
+    """Spot-check that NIfTI files in the HF dataset are loadable."""
+    import random
+
+    errors = []
+    checked = 0
+
+    # Sample random rows
+    indices = random.sample(range(len(ds)), min(sample_size, len(ds)))
+
+    for idx in indices:
+        row = ds[idx]
+        try:
+            # Check T1w if present
+            if row["t1w"] is not None:
+                shape = row["t1w"].shape
+                if len(shape) != 3:
+                    errors.append(f"Row {idx} t1w: unexpected shape {shape}")
+                checked += 1
+
+            # Check first BOLD run if present
+            if row["bold_naming40"] and len(row["bold_naming40"]) > 0:
+                shape = row["bold_naming40"][0].shape
+                if len(shape) != 4:
+                    errors.append(f"Row {idx} bold_naming40[0]: unexpected shape {shape}")
+                checked += 1
+
+        except Exception as e:
+            errors.append(f"Row {idx}: {e}")
+
+    if not errors:
+        return HFValidationCheck(
+            name="nifti_loadable",
+            expected=f"{sample_size} samples loadable",
+            actual=f"{checked} checked, all OK",
+            passed=True,
+        )
+
+    return HFValidationCheck(
+        name="nifti_loadable",
+        expected=f"{sample_size} samples loadable",
+        actual=f"{len(errors)} errors",
+        passed=False,
+        details="; ".join(errors[:3]),
+    )
+
+
+def validate_arc_hf(
+    ds: Dataset,
+    nifti_sample_size: int = 5,
+    check_nifti: bool = True,
+) -> HFValidationResult:
+    """
+    Validate an ARC HuggingFace dataset against SSOT expectations.
+
+    Args:
+        ds: HuggingFace Dataset to validate.
+        nifti_sample_size: Number of NIfTI files to spot-check.
+        check_nifti: If True, verify NIfTI files are loadable.
+
+    Returns:
+        HFValidationResult with all check outcomes.
+    """
+    result = HFValidationResult(dataset_name="hugging-science/arc-aphasia-bids")
+
+    # Schema check
+    result.add(check_schema(ds, ARC_HF_EXPECTED_SCHEMA))
+
+    # Row count
+    result.add(check_row_count(ds, ARC_HF_EXPECTED_COUNTS["rows"]))
+
+    # Unique subjects
+    result.add(
+        check_unique_values(ds, "subject_id", ARC_HF_EXPECTED_COUNTS["subjects"], "unique_subjects")
+    )
+
+    # Singleton modality non-null counts
+    for col, key in [
+        ("t1w", "t1w_non_null"),
+        ("t2w", "t2w_non_null"),
+        ("flair", "flair_non_null"),
+        ("lesion", "lesion_non_null"),
+    ]:
+        result.add(check_non_null_count(ds, col, ARC_HF_EXPECTED_COUNTS[key]))
+
+    # List modality session counts
+    for col, key in [
+        ("bold_naming40", "bold_naming40_sessions"),
+        ("bold_rest", "bold_rest_sessions"),
+        ("dwi", "dwi_sessions"),
+        ("sbref", "sbref_sessions"),
+    ]:
+        result.add(check_list_sessions(ds, col, ARC_HF_EXPECTED_COUNTS[key]))
+
+    # Total run counts
+    for col, key in [
+        ("bold_naming40", "bold_naming40_runs"),
+        ("bold_rest", "bold_rest_runs"),
+        ("dwi", "dwi_runs"),
+        ("sbref", "sbref_runs"),
+    ]:
+        result.add(check_total_list_items(ds, col, ARC_HF_EXPECTED_COUNTS[key]))
+
+    # DWI gradient alignment
+    result.add(check_list_alignment(ds, ["dwi", "dwi_bvals", "dwi_bvecs"]))
+
+    # NIfTI loadability (optional, can be slow)
+    if check_nifti:
+        result.add(_check_nifti_loadable(ds, nifti_sample_size))
+
+    return result
+
+
+def validate_arc_hf_from_hub(
+    repo_id: str = "hugging-science/arc-aphasia-bids",
+    split: str = "train",
+    nifti_sample_size: int = 5,
+    check_nifti: bool = True,
+) -> HFValidationResult:
+    """
+    Load and validate an ARC dataset directly from HuggingFace Hub.
+
+    Args:
+        repo_id: HuggingFace repository ID.
+        split: Dataset split to validate.
+        nifti_sample_size: Number of NIfTI files to spot-check.
+        check_nifti: If True, verify NIfTI files are loadable.
+
+    Returns:
+        HFValidationResult with all check outcomes.
+    """
+    from datasets import load_dataset
+
+    logger.info(f"Loading dataset from {repo_id}...")
+    ds = load_dataset(repo_id, split=split)
+
+    return validate_arc_hf(
+        ds,
+        nifti_sample_size=nifti_sample_size,
+        check_nifti=check_nifti,
     )

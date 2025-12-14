@@ -133,18 +133,15 @@ The ARC dataset was created to address the lack of large-scale, publicly availab
 
 ### Source Data
 
-Data was collected at the University of South Carolina and Medical University of South Carolina as part of ongoing aphasia recovery research. All participants provided informed consent under IRB-approved protocols.
+Data were acquired under studies approved by the Institutional Review Board at the University of South Carolina (per the OpenNeuro ds004884 `dataset_description.json`).
 
 ### Annotations
 
-Lesion masks were manually traced by trained neuroimaging experts on T1-weighted or FLAIR images, following established stroke lesion delineation protocols.
+Expert-drawn lesion segmentation masks are provided in `derivatives/lesion_masks/`.
 
 ## Personal and Sensitive Information
 
-- **De-identified:** All data has been de-identified per HIPAA guidelines
-- **Defaced:** Structural MRI images have been defaced to prevent facial reconstruction
-- **No PHI:** No protected health information is included
-- **Consent:** All participants consented to public data sharing
+- **Anonymized:** OpenNeuro ds004884 `dataset_description.json` states the final dataset is fully anonymised.
 
 ## Considerations for Using the Data
 
@@ -156,17 +153,16 @@ This dataset enables research into:
 - Automated clinical tools for aphasia assessment
 - Understanding of brain-language relationships
 
-### Known Biases
+### Potential Biases
 
-- **Geographic:** Data collected primarily from Southeastern US medical centers
-- **Age:** Stroke predominantly affects older adults; pediatric cases underrepresented
-- **Severity:** Very severe aphasia cases may be underrepresented due to consent requirements
+- **Site:** Data were acquired under University of South Carolina IRB approval (per OpenNeuro metadata)
+- **Age:** Adult cohort (`age_at_stroke` ranges from 27 to 80 years in participants.tsv)
 
 ### Known Limitations
 
 - Not all sessions have all modalities (check for None/empty lists)
 - Lesion masks available for 228/230 subjects
-- Longitudinal follow-up varies by subject (1-12 sessions)
+- Longitudinal follow-up varies by subject (1-30 sessions)
 
 ## Usage
 
@@ -208,10 +204,12 @@ space_only = ds.filter(
 
 # Clinical metadata analysis
 import pandas as pd
-df = ds.to_pandas()[[
+
+# Select only scalar columns to avoid loading NIfTI columns into RAM
+df = ds.select_columns([
     "subject_id", "session_id", "age_at_stroke",
     "sex", "race", "wab_aq", "wab_days", "wab_type"
-]]
+]).to_pandas()
 print(df.describe())
 ```
 
