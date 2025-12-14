@@ -354,7 +354,9 @@ def push_dataset_to_hub(
         logger.info("Upload command completed!")
         logger.info("")
         logger.info("IMPORTANT: Verify upload before deleting staging directory:")
-        logger.info(f"  1. Check HuggingFace repo: https://huggingface.co/datasets/{config.hf_repo_id}")
+        logger.info(
+            f"  1. Check HuggingFace repo: https://huggingface.co/datasets/{config.hf_repo_id}"
+        )
         logger.info(f"  2. Verify all {num_shards} shards are present")
         logger.info(f"  3. Then manually delete: rm -rf '{staging_dir.resolve()}'")
         logger.info("=" * 60)
