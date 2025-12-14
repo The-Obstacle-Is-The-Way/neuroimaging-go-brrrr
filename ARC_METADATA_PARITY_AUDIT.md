@@ -3,10 +3,28 @@
 **Date:** 2025-12-13
 **Auditor:** Claude Code (requested by Ray)
 **Status:** 🔴 INCOMPLETE PARITY - Action Required
+**Last Updated:** 2025-12-13 (expanded with DWI gradients, lesion sidecars, HF status)
 
 ## Summary
 
 The HuggingFace dataset (`hugging-science/arc-aphasia-bids`) contains all **NIfTI imaging data** but is **missing metadata** that exists in the OpenNeuro source (`ds004884`).
+
+### Critical Gaps Identified
+
+| Gap | Severity | Status |
+|-----|----------|--------|
+| DWI gradients (bval/bvec) | 🔴 CRITICAL | 2089 files NOT uploaded |
+| BOLD task entity | 🔴 CRITICAL | Cannot distinguish naming40 vs rest |
+| `race` column | 🟡 HIGH | Missing from participants metadata |
+| `wab_days` column | 🟡 HIGH | Missing from participants metadata |
+| `t2w_acquisition` | 🟡 HIGH | Code merged (PR #13), **NOT yet pushed to HF** |
+| Lesion mask SpatialReference | 🟢 LOW | Could resolve multi-T2w ambiguity |
+
+### Current HuggingFace Dataset Status
+
+**Verified 2025-12-13:** `hugging-science/arc-aphasia-bids` has **13 columns** (no `t2w_acquisition`).
+
+PR #13 merged `t2w_acquisition` to our codebase, but **the HuggingFace dataset has NOT been rebuilt/re-pushed**.
 
 ## Local Dataset Paths (for verification)
 
@@ -127,7 +145,88 @@ The BOLD fMRI data has **two distinct tasks**:
 
 ---
 
-## 3. Sidecar JSON Metadata
+## 3. DWI Gradient Files (bval/bvec) Audit
+
+### Source Evidence (OpenNeuro)
+
+```bash
+$ find . -name "*.bval" | wc -l
+2089
+
+$ find . -name "*.bvec" | wc -l
+2089
+
+$ find . -name "*_dwi.nii.gz" | wc -l
+2089
+```
+
+**PERFECT 1:1:1 MATCH** - Every DWI NIfTI has both `.bval` and `.bvec` gradient files.
+
+### Sample Files
+
+```text
+sub-M2001/ses-1/dwi/
+├── sub-M2001_ses-1_acq-epb0p2_dir-AP_run-1_dwi.nii.gz
+├── sub-M2001_ses-1_acq-epb0p2_dir-AP_run-1_dwi.bval    ← NOT UPLOADED
+├── sub-M2001_ses-1_acq-epb0p2_dir-AP_run-1_dwi.bvec    ← NOT UPLOADED
+```
+
+### Why This Matters
+
+DWI analysis **requires** gradient information:
+- `.bval` - b-values (diffusion weighting strength)
+- `.bvec` - gradient directions (3D vectors)
+
+Without these, DWI NIfTIs are **useless for diffusion analysis** (tractography, FA maps, etc.).
+
+### Parity Status
+
+| File Type | OpenNeuro | HuggingFace | Status |
+|-----------|-----------|-------------|--------|
+| `*_dwi.nii.gz` | 2089 | 2089 | ✅ Complete |
+| `*_dwi.bval` | 2089 | 0 | 🔴 **MISSING** |
+| `*_dwi.bvec` | 2089 | 0 | 🔴 **MISSING** |
+
+---
+
+## 4. Lesion Mask JSON Sidecars
+
+### Source Evidence (OpenNeuro)
+
+```bash
+$ find . -name "*lesion_mask*.json" | head -3 | xargs cat
+```
+
+```json
+{
+    "Type": "Lesion",
+    "SpatialReference": "bids:raw:sub-M2221/ses-2045/anat/sub-M2221_ses-2045_acq-spc3p2_run-4_T2w.nii.gz"
+}
+{
+    "Type": "Lesion",
+    "SpatialReference": "bids:raw:sub-M2013/ses-195/anat/sub-M2013_ses-195_acq-spc3_run-3_T2w.nii.gz"
+}
+```
+
+### Why This Matters
+
+The `SpatialReference` field **explicitly links each lesion mask to its corresponding T2w image**.
+
+This could resolve the **multi-T2w session ambiguity** (sub-M2105/ses-964 has 2 T2w files):
+- Instead of `find_single_nifti()` returning `None`, we could parse the JSON sidecar
+- The sidecar tells us exactly which T2w the lesion was traced on
+
+### Current Status
+
+| Data | OpenNeuro | HuggingFace | Status |
+|------|-----------|-------------|--------|
+| Lesion mask NIfTI | 228 | 228 | ✅ Complete |
+| Lesion mask JSON sidecar | 228 | 0 | 🟡 Not exposed (low priority) |
+| SpatialReference parsing | N/A | ❌ | 🟡 Could resolve ambiguity |
+
+---
+
+## 5. Scanner/Sequence Sidecar JSON Metadata
 
 Each NIfTI has a sidecar JSON with scanner/sequence parameters. Example:
 
@@ -149,7 +248,15 @@ Each NIfTI has a sidecar JSON with scanner/sequence parameters. Example:
 
 ---
 
-## 4. Recommendations
+## 6. Recommendations
+
+### Priority 0: BLOCKING (makes data unusable for intended purpose)
+
+| Field | Effort | Impact | Blocking? |
+|-------|--------|--------|-----------|
+| DWI `.bval` files | Medium | 🔴 CRITICAL - DWI unusable for diffusion analysis | **YES** |
+| DWI `.bvec` files | Medium | 🔴 CRITICAL - DWI unusable for diffusion analysis | **YES** |
+| `bold_task` | Medium (restructure) | 🔴 CRITICAL - fMRI unusable without this | **YES** |
 
 ### Priority 1: MUST FIX (breaks usability)
 
@@ -157,7 +264,7 @@ Each NIfTI has a sidecar JSON with scanner/sequence parameters. Example:
 |-------|--------|--------|
 | `race` | Low (add to schema) | High - demographic analysis |
 | `wab_days` | Low (add to schema) | High - longitudinal analysis |
-| `bold_task` | Medium (restructure) | 🔴 CRITICAL - fMRI unusable without this |
+| `t2w_acquisition` push | Low (rebuild + push) | High - already in code, not in HF yet |
 
 ### Priority 2: SHOULD FIX (improves completeness)
 
@@ -170,45 +277,71 @@ Each NIfTI has a sidecar JSON with scanner/sequence parameters. Example:
 
 | Field | Effort | Impact |
 |-------|--------|--------|
-| T1w/FLAIR/DWI acquisition | Low | Marginal benefit |
+| T1w/FLAIR acquisition types | Low | Marginal benefit |
+| Lesion mask SpatialReference | Low | Could resolve multi-T2w edge case |
 | Sidecar JSON fields | High | Low benefit (download from source) |
 
 ---
 
-## 5. Impact on Downstream Projects
+## 7. Impact on Downstream Projects
 
 ### arc-meshchop (lesion segmentation)
 - ✅ T1w, T2w, FLAIR, lesion masks: **Complete**
-- ✅ T2w acquisition type: **Just added**
+- ✅ T2w acquisition type: **Just added** (code only, not yet on HF)
 - ❌ `race`, `wab_days`: **Not needed** for segmentation
 - ❌ BOLD task: **Not needed** for segmentation
+- ❌ DWI gradients: **Not needed** for segmentation
 
 **Verdict:** arc-meshchop is unaffected by missing metadata.
 
-### Broader Research Use
-- ❌ fMRI studies: **BLOCKED** - cannot distinguish task vs rest
-- ❌ Demographic studies: **BLOCKED** - missing `race`
-- ❌ Longitudinal timing: **BLOCKED** - missing `wab_days`
+### Diffusion Research (tractography, FA maps, etc.)
+- ❌ **BLOCKED** - DWI NIfTIs are present but bval/bvec are NOT
+- Without gradient information, DWI data is **completely unusable**
+- Researchers MUST re-download from OpenNeuro for any diffusion analysis
+
+### fMRI Research
+- ❌ **BLOCKED** - cannot distinguish task (naming40) vs rest
+- Both task types mixed in `bold: Sequence(Nifti())`
+- Researchers MUST re-download from OpenNeuro for fMRI analysis
+
+### Demographic/Longitudinal Studies
+- ❌ **BLOCKED** - missing `race`
+- ❌ **BLOCKED** - missing `wab_days`
 
 ---
 
-## 6. Action Items
+## 8. Action Items
 
-- [ ] Add `race` column to schema and rebuild
-- [ ] Add `wab_days` column to schema and rebuild
+### P0 - BLOCKING (must fix before dataset is usable)
+
+- [ ] Add DWI `.bval` files to schema (new feature type needed?)
+- [ ] Add DWI `.bvec` files to schema (new feature type needed?)
 - [ ] Restructure BOLD to preserve `task` entity (breaking change?)
+
+### P1 - MUST FIX
+
+- [ ] Add `race` column to schema
+- [ ] Add `wab_days` column to schema
+- [ ] Rebuild and push to HuggingFace (includes `t2w_acquisition`)
+
+### P2 - SHOULD FIX
+
 - [ ] Consider adding `dir` (phase encoding direction)
 - [ ] Consider preserving `run` numbers
-- [ ] Re-upload to HuggingFace Hub after fixes
+
+### P3 - NICE TO HAVE
+
+- [ ] Parse lesion mask SpatialReference to resolve multi-T2w ambiguity
 
 ---
 
-## 7. Version History
+## 9. Version History
 
 | Date | Change |
 |------|--------|
 | 2025-12-13 | Initial audit created |
-| 2025-12-13 | PR #13 merged: Added `t2w_acquisition` field |
+| 2025-12-13 | PR #13 merged: Added `t2w_acquisition` field (code only) |
+| 2025-12-13 | Expanded audit: DWI gradients, lesion sidecars, HF status verified |
 
 ---
 
