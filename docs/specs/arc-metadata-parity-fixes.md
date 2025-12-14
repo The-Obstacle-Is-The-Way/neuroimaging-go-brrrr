@@ -92,9 +92,10 @@ sub-M2221_ses-2332_task-naming40_acq-epfid2_dir-AP_run-23_bold.nii.gz
 
 **Verified counts:**
 ```text
-participants.tsv rows (data): 244
+participants.tsv rows (data): 245 (wc -l shows 245 due to no trailing newline)
 Actual sub-* directories:     230
 Subjects in TSV but no dir:   15 (sub-M2019, sub-M2085, sub-M2130, etc.)
+Subjects with NaN race:       2 (sub-M2001, sub-M2003) - both have directories
 ```
 
 ```bash
@@ -231,6 +232,11 @@ dwi_bvecs = [_read_gradient_file(p, ".bvec") for p in dwi_paths]
 - If a gradient file is missing, the value is `None` (not omitted)
 - This allows: `for nifti, bval, bvec in zip(row["dwi"], row["dwi_bvals"], row["dwi_bvecs"])`
 
+**Type annotation:** `dwi_bvals: list[str | None]` and `dwi_bvecs: list[str | None]`
+
+**Note:** In OpenNeuro ds004884, ALL 2089 DWI files have matching bval/bvec (verified 1:1:1 match).
+The `None` handling is defensive for edge cases in other datasets.
+
 #### 1.4 Update Tests
 
 **File:** `tests/test_arc.py`
@@ -283,6 +289,32 @@ class TestReadGradientFile:
 ---
 
 ### Change 2: Split BOLD by Task (P0 - BLOCKING)
+
+#### Design Decision: Split Columns vs Aligned Metadata
+
+**Option A (Chosen): Split into separate columns**
+```python
+"bold_naming40": Sequence(Nifti()),
+"bold_rest": Sequence(Nifti()),
+```
+- Pro: Simple to query by task type
+- Pro: Type-safe (each column is well-defined)
+- Con: Breaking change (removes `bold`)
+- Con: Hard-codes current task set
+
+**Option B (Alternative): Keep bold + add aligned metadata**
+```python
+"bold": Sequence(Nifti()),
+"bold_task": Sequence(Value("string")),  # ["naming40", "rest", "rest", ...]
+```
+- Pro: Non-breaking (bold still works)
+- Pro: Generalizes to any future tasks
+- Con: Requires `zip(bold, bold_task)` to pair up
+
+**Decision:** Option A is acceptable for ARC because:
+1. ARC is a closed dataset (no new tasks will be added)
+2. Breaking change is documented in migration guide
+3. Simpler UX for downstream users (no zip needed)
 
 #### 2.1 Update `build_arc_file_table()`
 
@@ -579,11 +611,18 @@ uv run bids-hub arc build /path/to/ds004884 --dry-run
 
 ## Changelog
 
+- **2025-12-13 (v3):** Final corrections based on second senior review
+  - Fixed participants.tsv count: 245 rows (was incorrectly 244)
+  - Added NaN race subjects: sub-M2001, sub-M2003
+  - Added BOLD schema design decision section (Option A vs B)
+  - Added dwi_bvals/dwi_bvecs type annotation: `list[str | None]`
+  - Noted 1:1:1 bval/bvec match in ds004884 (None handling is defensive)
+
 - **2025-12-13 (v2):** Fixed inaccuracies based on senior review
   - Fixed column count: 19 (was incorrectly stated as 18)
   - Fixed race values: only `b` and `w` exist (removed "etc.")
   - Fixed wab_days range: 42-8798 (was incorrectly stated as ~800-8800)
-  - Added participant vs subject count clarification (244 in TSV, 230 with directories)
+  - Added participant vs subject count clarification (245 in TSV, 230 with directories)
   - Fixed test fixture instructions to match existing DWI naming (`_run-01_dwi.nii.gz`)
   - Added dwi/dwi_bvals/dwi_bvecs alignment invariant
 
