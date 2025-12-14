@@ -404,6 +404,13 @@ class TestPushDatasetToHub:
 
             mock_write.side_effect = create_dummy_file
 
+            # Remote verification: all expected files are present in repo after upload
+            mock_api_instance.list_repo_files.return_value = [
+                "dataset_info.json",
+                "data/train-00000-of-00002.parquet",
+                "data/train-00001-of-00002.parquet",
+            ]
+
             # Call with num_shards=2 using real dataset
             push_dataset_to_hub(real_ds, config, num_shards=2)
 
@@ -420,6 +427,9 @@ class TestPushDatasetToHub:
 
             # Verify upload_large_folder called (bulk upload instead of per-shard)
             mock_api_instance.upload_large_folder.assert_called_once()
+
+            # Verify remote verification was performed
+            mock_api_instance.list_repo_files.assert_called()
 
         # Clean up staging directory after test (since we no longer auto-delete)
         # See BUG-004: We don't auto-delete to avoid race with HF retry logic

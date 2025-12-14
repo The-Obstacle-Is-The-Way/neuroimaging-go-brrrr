@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import logging
+import time
+from collections.abc import Iterable
 from pathlib import Path
 
 import pandas as pd
@@ -28,6 +30,71 @@ logger = logging.getLogger(__name__)
 # The timeout is restored in a finally block, but race conditions could occur if multiple
 # uploads run simultaneously.
 _HF_UPLOAD_TIMEOUT = 300  # 5 minutes
+
+
+def _format_example_paths(paths: Iterable[str], *, max_items: int = 10) -> str:
+    paths_list = sorted(paths)
+    shown = paths_list[:max_items]
+    if len(paths_list) <= max_items:
+        return ", ".join(shown)
+    remaining = len(paths_list) - max_items
+    return f"{', '.join(shown)}, ... (+{remaining} more)"
+
+
+def _expected_remote_shard_paths(split_name: str, num_shards: int) -> set[str]:
+    return {f"data/{split_name}-{i:05d}-of-{num_shards:05d}.parquet" for i in range(num_shards)}
+
+
+def _verify_remote_upload_complete(
+    api: HfApi,
+    *,
+    repo_id: str,
+    revision: str,
+    split_name: str,
+    num_shards: int,
+    max_attempts: int = 3,
+    retry_sleep_s: float = 10.0,
+) -> None:
+    """
+    Verify that all expected shard files are present in the remote dataset repo.
+
+    This is intentionally lightweight: it checks for path presence via `list_repo_files`
+    but does not validate contents.
+    """
+    if max_attempts < 1:
+        raise ValueError("max_attempts must be >= 1")
+    if retry_sleep_s < 0:
+        raise ValueError("retry_sleep_s must be >= 0")
+
+    expected_paths = _expected_remote_shard_paths(split_name, num_shards) | {"dataset_info.json"}
+    missing_paths: set[str] | None = None
+
+    for attempt in range(1, max_attempts + 1):
+        repo_files = set(
+            api.list_repo_files(repo_id=repo_id, repo_type="dataset", revision=revision)
+        )
+        missing_paths = expected_paths - repo_files
+        if not missing_paths:
+            return
+
+        if attempt < max_attempts and retry_sleep_s > 0:
+            logger.warning(
+                "Remote verification attempt %d/%d: %d expected files missing; "
+                "retrying in %.1fs...",
+                attempt,
+                max_attempts,
+                len(missing_paths),
+                retry_sleep_s,
+            )
+            time.sleep(retry_sleep_s)
+
+    missing_paths = missing_paths or expected_paths
+    raise RuntimeError(
+        "Remote verification failed: "
+        f"{len(missing_paths)}/{len(expected_paths)} expected files are missing in "
+        f"{repo_id}@{revision}. Missing (first 20): "
+        + _format_example_paths(missing_paths, max_items=20)
+    )
 
 
 def validate_file_table_columns(
@@ -191,6 +258,7 @@ def push_dataset_to_hub(
         api.create_repo(config.hf_repo_id, repo_type="dataset", private=private, exist_ok=True)
 
         split_name = config.split if config.split else "train"
+        target_revision = revision or hf_constants.DEFAULT_REVISION
 
         # Use a persistent staging directory (not tempfile) to survive crashes
         # and allow resumption. Located in the current working directory.
@@ -261,8 +329,27 @@ def push_dataset_to_hub(
         )
 
         # NOTE: Do NOT auto-delete staging directory!
-        # upload_large_folder() may return before all retries complete.
+        # Even if `upload_large_folder()` is expected to be blocking, keep staging
+        # until we've verified the remote state. This prevents any chance of
+        # deleting files that might still be needed for retries/resume.
         # See BUG-004: Premature staging directory deletion during upload retries.
+        logger.info("Phase 4: Verifying remote shard presence on HuggingFace Hub...")
+        try:
+            _verify_remote_upload_complete(
+                api,
+                repo_id=config.hf_repo_id,
+                revision=target_revision,
+                split_name=split_name,
+                num_shards=num_shards,
+            )
+        except RuntimeError as exc:
+            logger.error(str(exc))
+            logger.error("DO NOT delete staging directory: %s", staging_dir.resolve())
+            logger.error("Re-run the upload to resume/retry without regenerating shards.")
+            raise
+
+        logger.info("Remote verification passed: all expected shards are present on the Hub.")
+
         logger.info("=" * 60)
         logger.info("Upload command completed!")
         logger.info("")

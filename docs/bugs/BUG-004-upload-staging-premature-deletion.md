@@ -66,6 +66,12 @@ logger.info(f"  2. Verify all {num_shards} shards are present")
 logger.info(f"  3. Then manually delete: rm -rf '{staging_dir.resolve()}'")
 ```
 
+Additionally, `push_dataset_to_hub()` now performs a lightweight remote verification step
+(`HfApi.list_repo_files()`) after `upload_large_folder()` returns, ensuring all expected shard
+paths and `dataset_info.json` are present on the target revision before printing the cleanup
+instructions. If the verification fails, the function raises and instructs the user to keep the
+staging directory for resume/retry.
+
 This ensures:
 1. User can verify all files uploaded successfully
 2. If upload failed, staging dir is preserved for resume
