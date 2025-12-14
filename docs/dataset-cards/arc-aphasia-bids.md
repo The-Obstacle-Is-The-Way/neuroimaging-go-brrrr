@@ -46,9 +46,50 @@ The Aphasia Recovery Cohort (ARC) is a large-scale, longitudinal neuroimaging da
 - **Paper:** [Gibson et al., Scientific Data 2024](https://doi.org/10.1038/s41597-024-03819-7)
 - **License:** CC0 1.0 (Public Domain)
 
-## Schema (19 columns)
+## Supported Tasks
+
+- **Lesion Segmentation:** Expert-drawn lesion masks enable training/evaluation of stroke lesion segmentation models
+- **Aphasia Severity Prediction:** WAB-AQ scores (0-100) provide continuous severity labels for regression tasks
+- **Aphasia Type Classification:** WAB-derived aphasia type labels (Broca's, Wernicke's, Anomic, etc.)
+- **Longitudinal Analysis:** Multiple sessions per subject enable recovery trajectory modeling
+- **Diffusion Analysis:** Full bval/bvec gradients enable tractography and diffusion modeling
+- **Task-based fMRI:** Naming40 and resting-state runs separated for targeted analysis
+
+## Languages
+
+Clinical metadata and documentation are in English.
+
+## Dataset Structure
+
+### Data Instance
 
 Each row represents a single scanning session (subject + timepoint):
+
+```python
+{
+    "subject_id": "sub-M2001",
+    "session_id": "ses-1",
+    "t1w": <nibabel.Nifti1Image>,              # T1-weighted structural
+    "t2w": <nibabel.Nifti1Image>,              # T2-weighted structural
+    "t2w_acquisition": "space_2x",             # T2w sequence type
+    "flair": <nibabel.Nifti1Image>,            # FLAIR structural
+    "bold_naming40": [<Nifti1Image>, ...],     # Naming task fMRI runs
+    "bold_rest": [<Nifti1Image>, ...],         # Resting state fMRI runs
+    "dwi": [<Nifti1Image>, ...],               # Diffusion runs
+    "dwi_bvals": ["0 1000 1000...", ...],      # b-values per run
+    "dwi_bvecs": ["0 0 0\n1 0 0\n...", ...],   # b-vectors per run
+    "sbref": [<Nifti1Image>, ...],             # Single-band references
+    "lesion": <nibabel.Nifti1Image>,           # Expert lesion mask
+    "age_at_stroke": 58.0,
+    "sex": "M",
+    "race": "w",
+    "wab_aq": 72.5,
+    "wab_days": 180.0,
+    "wab_type": "Anomic"
+}
+```
+
+### Data Fields
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -67,10 +108,65 @@ Each row represents a single scanning session (subject + timepoint):
 | `lesion` | Nifti | Expert-drawn lesion segmentation mask (nullable) |
 | `age_at_stroke` | float32 | Subject age at stroke onset in years |
 | `sex` | string | Biological sex ("M" or "F") |
-| `race` | string | Self-reported race (nullable) |
+| `race` | string | Self-reported race: "b" (Black), "w" (White), or null |
 | `wab_aq` | float32 | Western Aphasia Battery Aphasia Quotient (0-100) |
 | `wab_days` | float32 | Days since stroke when WAB was administered |
 | `wab_type` | string | Aphasia type classification |
+
+### Data Splits
+
+| Split | Sessions | Description |
+|-------|----------|-------------|
+| train | 902 | All sessions (no predefined train/test split) |
+
+Note: Users should implement their own train/validation/test splits, ensuring no subject overlap between splits for valid evaluation.
+
+## Dataset Creation
+
+### Curation Rationale
+
+The ARC dataset was created to address the lack of large-scale, publicly available neuroimaging data for aphasia research. It enables:
+
+- Development of automated lesion segmentation algorithms
+- Machine learning models for aphasia severity prediction
+- Studies of brain plasticity and language recovery
+
+### Source Data
+
+Data was collected at the University of South Carolina and Medical University of South Carolina as part of ongoing aphasia recovery research. All participants provided informed consent under IRB-approved protocols.
+
+### Annotations
+
+Lesion masks were manually traced by trained neuroimaging experts on T1-weighted or FLAIR images, following established stroke lesion delineation protocols.
+
+## Personal and Sensitive Information
+
+- **De-identified:** All data has been de-identified per HIPAA guidelines
+- **Defaced:** Structural MRI images have been defaced to prevent facial reconstruction
+- **No PHI:** No protected health information is included
+- **Consent:** All participants consented to public data sharing
+
+## Considerations for Using the Data
+
+### Social Impact
+
+This dataset enables research into:
+
+- Improved stroke rehabilitation through better outcome prediction
+- Automated clinical tools for aphasia assessment
+- Understanding of brain-language relationships
+
+### Known Biases
+
+- **Geographic:** Data collected primarily from Southeastern US medical centers
+- **Age:** Stroke predominantly affects older adults; pediatric cases underrepresented
+- **Severity:** Very severe aphasia cases may be underrepresented due to consent requirements
+
+### Known Limitations
+
+- Not all sessions have all modalities (check for None/empty lists)
+- Lesion masks available for 228/230 subjects
+- Longitudinal follow-up varies by subject (1-12 sessions)
 
 ## Usage
 
@@ -85,23 +181,22 @@ print(session["subject_id"])  # "sub-M2001"
 print(session["t1w"])         # nibabel.Nifti1Image
 print(session["wab_aq"])      # Aphasia severity score
 
-# Access BOLD by task type (NEW in v2)
+# Access BOLD by task type
 for run in session["bold_naming40"]:
     print(f"Naming40 run shape: {run.shape}")
 
 for run in session["bold_rest"]:
     print(f"Resting state run shape: {run.shape}")
 
-# Access DWI with gradient information (NEW in v2)
+# Access DWI with gradient information
 for i, (dwi_run, bval, bvec) in enumerate(zip(
     session["dwi"], session["dwi_bvals"], session["dwi_bvecs"]
 )):
     print(f"DWI run {i+1}: shape={dwi_run.shape}")
-    print(f"  b-values: {bval[:50]}...")  # First 50 chars
+    print(f"  b-values: {bval[:50]}...")
     print(f"  b-vectors: {bvec[:50]}...")
 
 # Filter by T2w acquisition type (for paper replication)
-# See: https://arxiv.org/abs/2503.05531 (MeshNet paper)
 space_only = ds.filter(
     lambda x: (
         x["lesion"] is not None
@@ -110,9 +205,8 @@ space_only = ds.filter(
     )
 )
 # Returns 222 SPACE samples (115 space_2x + 107 space_no_accel)
-# Excludes: 5 TSE samples, 1 multi-T2w session (sub-M2105/ses-964)
 
-# Clinical metadata analysis (NEW: race, wab_days)
+# Clinical metadata analysis
 import pandas as pd
 df = ds.to_pandas()[[
     "subject_id", "session_id", "age_at_stroke",
@@ -120,15 +214,6 @@ df = ds.to_pandas()[[
 ]]
 print(df.describe())
 ```
-
-## Supported Tasks
-
-- **Lesion Segmentation:** Expert-drawn lesion masks enable training/evaluation of stroke lesion segmentation models
-- **Aphasia Severity Prediction:** WAB-AQ scores (0-100) provide continuous severity labels for regression tasks
-- **Aphasia Type Classification:** WAB-derived aphasia type labels (Broca's, Wernicke's, Anomic, etc.)
-- **Longitudinal Analysis:** Multiple sessions per subject enable recovery trajectory modeling
-- **Diffusion Analysis:** Full bval/bvec gradients enable tractography and diffusion modeling
-- **Task-based fMRI:** Naming40 and resting-state runs separated for targeted analysis
 
 ## Technical Notes
 
@@ -153,11 +238,25 @@ These are essential for diffusion tensor imaging (DTI) and tractography analysis
 NIfTI files are loaded on-demand. For large-scale processing:
 
 ```python
-# Stream without loading all into memory
 for session in ds:
     process(session)
     # Data is garbage collected after each iteration
 ```
+
+### Original BIDS Source
+
+This dataset is derived from [OpenNeuro ds004884](https://openneuro.org/datasets/ds004884). The original BIDS structure is preserved in the column naming and organization.
+
+## Additional Information
+
+### Dataset Curators
+
+- **Original Dataset:** Gibson et al. (University of South Carolina)
+- **HuggingFace Conversion:** The-Obstacle-Is-The-Way
+
+### Licensing
+
+This dataset is released under **CC0 1.0 Universal (Public Domain)**. You can copy, modify, distribute, and perform the work, even for commercial purposes, all without asking permission.
 
 ## Citation
 
@@ -173,6 +272,10 @@ for session in ds:
   doi={10.1038/s41597-024-03819-7}
 }
 ```
+
+## Contributions
+
+Thanks to [@The-Obstacle-Is-The-Way](https://github.com/The-Obstacle-Is-The-Way) for converting this dataset to HuggingFace format with native `Nifti()` feature support.
 
 ## Changelog
 
