@@ -243,17 +243,14 @@ def build_arc_file_table(bids_root: Path) -> pd.DataFrame:
             flair_path = find_single_nifti(session_dir / "anat", "*_FLAIR.nii.gz")
 
             # Find functional modalities in func/ (ALL runs) - split by task
+            # NOTE: BIDS is case-sensitive; verified SSOT has only lowercase task names
             bold_all = find_all_niftis(session_dir / "func", "*_bold.nii.gz")
-            bold_naming40 = [p for p in bold_all if "task-naming40" in p.lower()]
-            bold_rest = [p for p in bold_all if "task-rest" in p.lower()]
+            bold_naming40 = [p for p in bold_all if "task-naming40" in p]
+            bold_rest = [p for p in bold_all if "task-rest" in p]
 
             # GUARDRAIL: Detect unexpected tasks to prevent silent data loss
             # ARC only has naming40 and rest tasks - any other task is a bug
-            unexpected = [
-                p
-                for p in bold_all
-                if "task-naming40" not in p.lower() and "task-rest" not in p.lower()
-            ]
+            unexpected = [p for p in bold_all if "task-naming40" not in p and "task-rest" not in p]
             if unexpected:
                 raise ValueError(
                     f"Unexpected BOLD task(s) (not naming40/rest) for {subject_id}/{session_id}: "

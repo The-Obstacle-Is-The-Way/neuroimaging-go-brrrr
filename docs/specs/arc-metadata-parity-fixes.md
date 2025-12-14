@@ -18,7 +18,7 @@ The ARC dataset on HuggingFace is missing critical metadata that exists in the O
 | Data Type | Current State | Impact |
 |-----------|---------------|--------|
 | DWI imaging | NIfTIs uploaded, **bval/bvec NOT uploaded** | DWI is **USELESS** for diffusion analysis |
-| BOLD fMRI | All runs mixed together | Cannot distinguish task (naming40) from rest |
+| BOLD fMRI | Runs not separated by task | Cannot distinguish task (naming40) from rest |
 | Demographics | `race` column missing | Cannot perform demographic analysis |
 | Longitudinal | `wab_days` column missing | Cannot analyze timing since stroke |
 
@@ -319,7 +319,7 @@ class TestReadGradientFile:
 
 #### Design Decision: Split Columns vs Aligned Metadata
 
-**Option A (Chosen): Split into separate columns**
+##### Option A (Chosen): Split into separate columns
 ```python
 "bold_naming40": Sequence(Nifti()),
 "bold_rest": Sequence(Nifti()),
@@ -329,7 +329,7 @@ class TestReadGradientFile:
 - Con: Breaking change (removes `bold`)
 - Con: Hard-codes current task set
 
-**Option B (Alternative): Keep bold + add aligned metadata**
+##### Option B (Alternative): Keep bold + add aligned metadata
 ```python
 "bold": Sequence(Nifti()),
 "bold_task": Sequence(Value("string")),  # ["naming40", "rest", "rest", ...]
