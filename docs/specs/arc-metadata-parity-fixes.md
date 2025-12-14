@@ -190,7 +190,9 @@ def _read_gradient_file(nifti_path: str, extension: str) -> str | None:
     gradient_path = base_path.with_suffix(extension)  # Replace .nii with .bval/.bvec
 
     if not gradient_path.exists():
-        logger.debug("Gradient file not found: %s", gradient_path)
+        # WARNING not DEBUG: ARC has verified 1:1:1 match for all 2089 DWI files.
+        # Missing gradient indicates data corruption, not expected absence.
+        logger.warning("Gradient file not found (data corruption?): %s", gradient_path)
         return None
 
     return gradient_path.read_text().strip()
@@ -284,6 +286,22 @@ class TestReadGradientFile:
         from bids_hub.datasets.arc import _read_gradient_file
         result = _read_gradient_file(str(nifti), ".bval")
         assert result is None
+
+    def test_logs_warning_when_missing(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Missing gradient file should log WARNING (not debug) for ARC."""
+        nifti = tmp_path / "sub-M2001_ses-1_dwi.nii.gz"
+        nifti.touch()
+        # No .bval file created
+
+        from bids_hub.datasets.arc import _read_gradient_file
+        with caplog.at_level(logging.WARNING):
+            _read_gradient_file(str(nifti), ".bval")
+
+        # Verify warning was logged (not debug)
+        assert any("Gradient file not found" in record.message for record in caplog.records)
+        assert all(record.levelno >= logging.WARNING for record in caplog.records if "Gradient" in record.message)
 ```
 
 ---
@@ -331,6 +349,18 @@ bold_paths = find_all_niftis(session_dir / "func", "*_bold.nii.gz")
 bold_all = find_all_niftis(session_dir / "func", "*_bold.nii.gz")
 bold_naming40 = [p for p in bold_all if "task-naming40" in p]
 bold_rest = [p for p in bold_all if "task-rest" in p]
+
+# GUARDRAIL: Detect unexpected tasks to prevent silent data loss
+# ARC only has naming40 and rest tasks - any other task is a bug
+unexpected = [p for p in bold_all if "task-naming40" not in p and "task-rest" not in p]
+if unexpected:
+    logger.warning(
+        "Found %d BOLD files with unexpected task types (not naming40/rest) for %s/%s: %s",
+        len(unexpected),
+        subject_id,
+        session_id,
+        unexpected[:3],  # Log first 3 to avoid log spam
+    )
 ```
 
 **Location:** Update `rows.append()` dict
@@ -409,6 +439,22 @@ def test_bold_split_by_task(self, synthetic_bids_root: Path) -> None:
     # Verify task entities in paths
     assert "task-naming40" in ses1["bold_naming40"][0]
     assert all("task-rest" in p for p in ses1["bold_rest"])
+
+
+def test_bold_unexpected_task_logs_warning(
+    self, synthetic_bids_root: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Verify unexpected BOLD task types trigger a warning."""
+    # Create a BOLD file with unexpected task
+    func_dir = synthetic_bids_root / "sub-M2001" / "ses-1" / "func"
+    unexpected_bold = func_dir / "sub-M2001_ses-1_task-unknown_run-01_bold.nii.gz"
+    _create_minimal_nifti(unexpected_bold)
+
+    with caplog.at_level(logging.WARNING):
+        build_arc_file_table(synthetic_bids_root)
+
+    # Verify warning was logged
+    assert any("unexpected task types" in record.message for record in caplog.records)
 ```
 
 ---
@@ -586,12 +632,47 @@ uv run bids-hub arc build /path/to/ds004884 --dry-run
 
 ---
 
+## Documentation Updates Required
+
+The `bold → bold_naming40 + bold_rest` change affects these files:
+
+| File | Current | Required Update |
+|------|---------|-----------------|
+| `docs/reference/schema.md:24` | `"bold": Sequence(Nifti())` | Replace with `bold_naming40` and `bold_rest` |
+| `docs/reference/api.md:138` | `bold` column documented | Replace with two columns |
+| `docs/how-to/validate-before-upload.md:34` | `multi_run_cols = ["bold", "dwi", "sbref"]` | Replace `bold` with `bold_naming40`, `bold_rest` |
+| `docs/explanation/architecture.md:82` | `- bold: Multiple fMRI runs per session` | Update description |
+| `CLAUDE.md` (ARC schema section) | Uses `bold` | Replace with two columns |
+
+**Not affected (other datasets):**
+- `docs/issues/003a_aomic_piop1.md` - AOMIC dataset, not ARC
+- `docs/issues/003b_aomic_id1000.md` - AOMIC dataset, not ARC
+
+---
+
+## Separate Issue: Validation Expected Counts
+
+**IMPORTANT:** This spec does NOT fix validation expected counts, but documents the discrepancy:
+
+| Modality | Expected (validation/arc.py) | Actual (OpenNeuro) | Status |
+|----------|------------------------------|--------------------|---------|
+| `lesion` | 230 | **228** | ❌ Mismatch |
+
+The validation at `src/bids_hub/validation/arc.py:31` expects 230 lesion masks, but OpenNeuro ds004884 only has 228.
+
+**Impact:** `uv run bids-hub arc validate` will fail on valid data.
+
+**Recommendation:** Create separate PR to fix validation counts after this parity spec is merged. Do NOT block metadata parity on validation fix.
+
+---
+
 ## Post-Implementation Checklist
 
 - [ ] All tests pass
 - [ ] Type checking passes
 - [ ] Linting passes
 - [ ] Dry-run build succeeds against local OpenNeuro data
+- [ ] Update documentation files listed above
 - [ ] Update `ARC_METADATA_PARITY_AUDIT.md` to mark items complete
 - [ ] Update `CLAUDE.md` with new schema
 - [ ] Update HuggingFace dataset card with new columns
@@ -610,6 +691,13 @@ uv run bids-hub arc build /path/to/ds004884 --dry-run
 ---
 
 ## Changelog
+
+- **2025-12-13 (v4):** Addressed spec completeness gaps
+  - Added BOLD task guardrail to detect unexpected tasks and prevent silent data loss
+  - Changed gradient missing log level: `debug` → `warning` (ARC has 1:1:1 match, missing = corruption)
+  - Added "Documentation Updates Required" section enumerating all files affected by bold split
+  - Added "Separate Issue: Validation Expected Counts" documenting lesion 230→228 discrepancy
+  - Updated post-implementation checklist to include doc updates
 
 - **2025-12-13 (v3):** Final corrections based on second senior review
   - Fixed participants.tsv count: 245 rows (was incorrectly 244)
@@ -632,4 +720,4 @@ uv run bids-hub arc build /path/to/ds004884 --dry-run
 
 ---
 
-**Reviewed by:** _Pending final approval_
+**Reviewed by:** _v4 - Spec completeness gaps addressed. Ready for final approval._
