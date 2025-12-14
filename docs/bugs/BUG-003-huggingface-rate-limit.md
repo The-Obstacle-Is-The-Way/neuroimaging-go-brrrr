@@ -52,7 +52,7 @@ The fix is in `src/bids_hub/core/builder.py`:
 1. **Write-then-upload**: All shards written to `./hf_upload_staging/data/` first
 2. **Bulk upload**: `upload_large_folder()` uploads everything at once
 3. **Resume support**: Staging dir persists, so crashes can resume from where they left off
-4. **Cleanup**: Staging dir deleted after successful upload
+4. **Manual cleanup**: User must manually delete staging dir after verifying upload (see BUG-004)
 
 ## Disk Space Requirement
 
