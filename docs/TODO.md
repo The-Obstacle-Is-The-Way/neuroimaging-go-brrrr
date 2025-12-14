@@ -50,10 +50,10 @@ Once upstream PR #7896 merges, remove the pandas roundtrip workaround (lines 185
 
 | Metric | Value |
 |--------|-------|
-| Tests | 91 passing |
+| Tests | 97 passing |
 | Coverage | 81% overall |
 | Ruff | 0 issues |
 | Mypy | 0 errors |
 | Critical Issues | None |
 
-Last audit: 2025-12-13
+Last audit: 2025-12-14

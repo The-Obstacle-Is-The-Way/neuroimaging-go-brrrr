@@ -75,6 +75,45 @@ def _extract_acquisition_type(filepath: str | None) -> str | None:
     return _ARC_ACQUISITION_MAP.get(acq_label, acq_label)
 
 
+def _read_gradient_file(nifti_path: str, extension: str) -> str:
+    """Read bval or bvec file content for a DWI NIfTI.
+
+    DWI files in BIDS have companion gradient files with the same base name:
+    - sub-X_ses-Y_dwi.nii.gz
+    - sub-X_ses-Y_dwi.bval  (b-values)
+    - sub-X_ses-Y_dwi.bvec  (gradient directions)
+
+    Args:
+        nifti_path: Absolute path to DWI NIfTI file
+        extension: Either ".bval" or ".bvec"
+
+    Returns:
+        File content as string (whitespace-stripped).
+
+    Raises:
+        FileNotFoundError: If the gradient file does not exist.
+
+    Example:
+        >>> _read_gradient_file("/data/sub-M2001_ses-1_dwi.nii.gz", ".bval")
+        "0 1000 2000 3000"
+    """
+    # Handle .nii.gz -> .bval/.bvec path conversion
+    # Path("/foo/bar.nii.gz").with_suffix("") -> "/foo/bar.nii"
+    # Path("/foo/bar.nii").with_suffix(".bval") -> "/foo/bar.bval"
+    base_path = Path(nifti_path)
+    if base_path.suffix == ".gz":
+        base_path = base_path.with_suffix("")  # Remove .gz
+    gradient_path = base_path.with_suffix(extension)  # Replace .nii with .bval/.bvec
+
+    if not gradient_path.exists():
+        # WARNING not DEBUG: ARC has verified 1:1:1 match for all 2089 DWI files.
+        # Missing gradient indicates data corruption, not expected absence.
+        logger.warning("Gradient file not found (data corruption?): %s", gradient_path)
+        raise FileNotFoundError(f"Missing gradient file: {gradient_path}")
+
+    return gradient_path.read_text().strip()
+
+
 def build_arc_file_table(bids_root: Path) -> pd.DataFrame:
     """
     Build a file table for the ARC dataset.
@@ -103,13 +142,18 @@ def build_arc_file_table(bids_root: Path) -> pd.DataFrame:
             - t2w (str | None): Absolute path to T2-weighted NIfTI
             - t2w_acquisition (str | None): Acquisition type for T2w (e.g., "space_2x")
             - flair (str | None): Absolute path to FLAIR NIfTI
-            - bold (list[str]): List of absolute paths to ALL BOLD runs
+            - bold_naming40 (list[str]): Paths to BOLD runs for picture naming task
+            - bold_rest (list[str]): Paths to BOLD runs for resting state
             - dwi (list[str]): List of absolute paths to ALL DWI runs
+            - dwi_bvals (list[str]): List of bval file contents
+            - dwi_bvecs (list[str]): List of bvec file contents
             - sbref (list[str]): List of absolute paths to ALL sbref runs
             - lesion (str | None): Absolute path to lesion mask NIfTI
             - age_at_stroke (float): Subject age at stroke
             - sex (str): Subject sex (M/F)
+            - race (str | None): Self-reported race (e.g., "b", "w")
             - wab_aq (float): WAB Aphasia Quotient (severity score)
+            - wab_days (float | None): Days since stroke when WAB assessment was collected
             - wab_type (str): Aphasia type classification
 
     Raises:
@@ -176,6 +220,18 @@ def build_arc_file_table(bids_root: Path) -> pd.DataFrame:
         sex = str(row.get("sex", "")) if pd.notna(row.get("sex")) else None
         wab_type = str(row.get("wab_type", "")) if pd.notna(row.get("wab_type")) else None
 
+        # Extract race
+        race = str(row.get("race", "")) if pd.notna(row.get("race")) else None
+
+        # Extract wab_days
+        wab_days_raw = row.get("wab_days")
+        wab_days: float | None = None
+        if wab_days_raw is not None and pd.notna(wab_days_raw):
+            try:
+                wab_days = float(wab_days_raw)
+            except (ValueError, TypeError):
+                logger.warning("Invalid wab_days for %s: %r", subject_id, wab_days_raw)
+
         # Iterate over each session
         for session_dir in session_dirs:
             session_id = session_dir.name  # e.g., "ses-1"
@@ -186,11 +242,28 @@ def build_arc_file_table(bids_root: Path) -> pd.DataFrame:
             t2w_acquisition = _extract_acquisition_type(t2w_path)
             flair_path = find_single_nifti(session_dir / "anat", "*_FLAIR.nii.gz")
 
-            # Find functional modalities in func/ (ALL runs)
-            bold_paths = find_all_niftis(session_dir / "func", "*_bold.nii.gz")
+            # Find functional modalities in func/ (ALL runs) - split by task
+            # NOTE: BIDS is case-sensitive; verified SSOT has only lowercase task names
+            bold_all = find_all_niftis(session_dir / "func", "*_bold.nii.gz")
+            bold_naming40 = [p for p in bold_all if "task-naming40" in p]
+            bold_rest = [p for p in bold_all if "task-rest" in p]
+
+            # GUARDRAIL: Detect unexpected tasks to prevent silent data loss
+            # ARC only has naming40 and rest tasks - any other task is a bug
+            unexpected = [p for p in bold_all if "task-naming40" not in p and "task-rest" not in p]
+            if unexpected:
+                raise ValueError(
+                    f"Unexpected BOLD task(s) (not naming40/rest) for {subject_id}/{session_id}: "
+                    f"{[Path(p).name for p in unexpected[:3]]} (showing up to 3)"
+                )
 
             # Find diffusion modalities in dwi/ (ALL runs)
             dwi_paths = find_all_niftis(session_dir / "dwi", "*_dwi.nii.gz")
+
+            # Read gradient files for each DWI run
+            dwi_bvals = [_read_gradient_file(p, ".bval") for p in dwi_paths]
+            dwi_bvecs = [_read_gradient_file(p, ".bvec") for p in dwi_paths]
+
             sbref_paths = find_all_niftis(session_dir / "dwi", "*_sbref.nii.gz")
 
             # Find lesion mask in derivatives for this session (single file)
@@ -208,13 +281,18 @@ def build_arc_file_table(bids_root: Path) -> pd.DataFrame:
                     "t2w": t2w_path,
                     "t2w_acquisition": t2w_acquisition,
                     "flair": flair_path,
-                    "bold": bold_paths,  # List of paths (all runs)
+                    "bold_naming40": bold_naming40,  # List of paths (naming40 task)
+                    "bold_rest": bold_rest,  # List of paths (rest task)
                     "dwi": dwi_paths,  # List of paths (all runs)
+                    "dwi_bvals": dwi_bvals,  # List of strings
+                    "dwi_bvecs": dwi_bvecs,  # List of strings
                     "sbref": sbref_paths,  # List of paths (all runs)
                     "lesion": lesion_path,
                     "age_at_stroke": age_at_stroke,
                     "sex": sex,
+                    "race": race,
                     "wab_aq": wab_aq,
+                    "wab_days": wab_days,
                     "wab_type": wab_type,
                 }
             )
@@ -253,13 +331,18 @@ def get_arc_features() -> Features:
         - t2w: T2-weighted structural MRI (Nifti, nullable, single file)
         - t2w_acquisition: T2w acquisition type (space_2x, space_no_accel, turbo_spin_echo)
         - flair: FLAIR structural MRI (Nifti, nullable, single file)
-        - bold: BOLD fMRI 4D time-series (Sequence of Nifti, supports multiple runs)
+        - bold_naming40: BOLD fMRI for naming40 task (Sequence of Nifti)
+        - bold_rest: BOLD fMRI for resting state (Sequence of Nifti)
         - dwi: Diffusion-weighted imaging (Sequence of Nifti, supports multiple runs)
+        - dwi_bvals: DWI b-values (Sequence of string, aligned with dwi)
+        - dwi_bvecs: DWI gradient directions (Sequence of string, aligned with dwi)
         - sbref: Single-band reference images (Sequence of Nifti, supports multiple runs)
         - lesion: Expert-drawn lesion mask (Nifti, single file)
         - age_at_stroke: Age at time of stroke (float)
         - sex: Biological sex (M/F)
+        - race: Self-reported race
         - wab_aq: WAB Aphasia Quotient (severity score, 0-100)
+        - wab_days: Days since stroke when WAB assessment was collected
         - wab_type: Aphasia type classification
 
     Returns:
@@ -275,15 +358,20 @@ def get_arc_features() -> Features:
             "t2w_acquisition": Value("string"),
             "flair": Nifti(),
             # Functional/Diffusion: multiple runs per session
-            "bold": Sequence(Nifti()),
+            "bold_naming40": Sequence(Nifti()),
+            "bold_rest": Sequence(Nifti()),
             "dwi": Sequence(Nifti()),
+            "dwi_bvals": Sequence(Value("string")),
+            "dwi_bvecs": Sequence(Value("string")),
             "sbref": Sequence(Nifti()),
             # Derivatives: single file per session
             "lesion": Nifti(),
             # Metadata
             "age_at_stroke": Value("float32"),
             "sex": Value("string"),
+            "race": Value("string"),
             "wab_aq": Value("float32"),
+            "wab_days": Value("float32"),
             "wab_type": Value("string"),
         }
     )

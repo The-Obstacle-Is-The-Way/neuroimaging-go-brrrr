@@ -84,13 +84,18 @@ Features({
     "t2w": Nifti(),                       # T2-weighted structural
     "t2w_acquisition": Value("string"),   # Acquisition type: space_2x, space_no_accel, turbo_spin_echo
     "flair": Nifti(),                     # FLAIR structural
-    "bold": Sequence(Nifti()),            # fMRI 4D time-series (list of runs)
+    "bold_naming40": Sequence(Nifti()),   # fMRI naming task (list of runs)
+    "bold_rest": Sequence(Nifti()),       # fMRI resting state (list of runs)
     "dwi": Sequence(Nifti()),             # Diffusion-weighted (list of runs)
+    "dwi_bvals": Sequence(Value("string")), # DWI b-values
+    "dwi_bvecs": Sequence(Value("string")), # DWI gradient directions
     "sbref": Sequence(Nifti()),           # Single-band reference (list of runs)
     "lesion": Nifti(),                    # Expert lesion mask
     "age_at_stroke": Value("float32"),
     "sex": Value("string"),
+    "race": Value("string"),              # Self-reported race
     "wab_aq": Value("float32"),           # Aphasia severity score
+    "wab_days": Value("float32"),         # Days since stroke at WAB
     "wab_type": Value("string"),
 })
 ```

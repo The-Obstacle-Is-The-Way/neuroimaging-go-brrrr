@@ -31,7 +31,7 @@ if missing:
 from pathlib import Path
 
 single_file_cols = ["t1w", "t2w", "flair", "lesion"]
-multi_run_cols = ["bold", "dwi", "sbref"]
+multi_run_cols = ["bold_naming40", "bold_rest", "dwi", "sbref"]
 
 for col in single_file_cols:
     for path in file_table[col].dropna():
@@ -70,7 +70,8 @@ for col in multi_run_cols:
 # t2w      439
 # flair    231
 # lesion   228
-# bold: 850 sessions, 1402 runs
+# bold_naming40: 606 sessions, 894 runs
+# bold_rest: 337 sessions, 508 runs
 # dwi: 613 sessions, 2089 runs
 # sbref: 88 sessions, 322 runs
 ```
