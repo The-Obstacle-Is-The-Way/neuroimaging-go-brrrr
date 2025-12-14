@@ -21,10 +21,13 @@ Features({
     "flair": Nifti(),
 
     # Functional imaging (multi-run support)
-    "bold": Sequence(Nifti()),
+    "bold_naming40": Sequence(Nifti()),  # Naming task
+    "bold_rest": Sequence(Nifti()),      # Resting state
 
     # Diffusion imaging (multi-run support)
     "dwi": Sequence(Nifti()),
+    "dwi_bvals": Sequence(Value("string")),
+    "dwi_bvecs": Sequence(Value("string")),
     "sbref": Sequence(Nifti()),
 
     # Derivatives (single file per session)
@@ -33,7 +36,9 @@ Features({
     # Demographics
     "age_at_stroke": Value("float32"),
     "sex": Value("string"),
+    "race": Value("string"),
     "wab_aq": Value("float32"),
+    "wab_days": Value("float32"),
     "wab_type": Value("string"),
 })
 ```

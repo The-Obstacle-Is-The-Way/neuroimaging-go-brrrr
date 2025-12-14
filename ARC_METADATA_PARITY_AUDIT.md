@@ -314,14 +314,14 @@ Each NIfTI has a sidecar JSON with scanner/sequence parameters. Example:
 
 ### P0 - BLOCKING (must fix before dataset is usable)
 
-- [ ] Add DWI `.bval` files to schema (new feature type needed?)
-- [ ] Add DWI `.bvec` files to schema (new feature type needed?)
-- [ ] Restructure BOLD to preserve `task` entity (breaking change?)
+- [x] Add DWI `.bval` files to schema (new feature type needed?)
+- [x] Add DWI `.bvec` files to schema (new feature type needed?)
+- [x] Restructure BOLD to preserve `task` entity (breaking change?)
 
 ### P1 - MUST FIX
 
-- [ ] Add `race` column to schema
-- [ ] Add `wab_days` column to schema
+- [x] Add `race` column to schema
+- [x] Add `wab_days` column to schema
 - [ ] Rebuild and push to HuggingFace (includes `t2w_acquisition`)
 
 ### P2 - SHOULD FIX

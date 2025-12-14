@@ -79,8 +79,8 @@ HuggingFace Hub (Parquet shards)
 ### 2. Sequence Types for Multi-Run Modalities
 
 ARC uses `Sequence(Nifti())` for modalities with multiple runs:
-- `bold`: Multiple fMRI runs per session
-- `dwi`: Multiple diffusion runs per session
+- `bold_naming40`/`bold_rest`: Multiple fMRI runs per session (split by task)
+- `dwi`: Multiple diffusion runs per session (plus aligned gradients)
 - `sbref`: Multiple single-band reference images
 
 This preserves the full dataset structure rather than arbitrarily selecting one run.

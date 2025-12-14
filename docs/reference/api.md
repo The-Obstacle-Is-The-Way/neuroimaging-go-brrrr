@@ -135,13 +135,18 @@ file_table = build_arc_file_table(Path("data/openneuro/ds004884"))
 | `t2w` | `str \| None` | Absolute path to T2w NIfTI |
 | `t2w_acquisition` | `str \| None` | T2w acquisition type (`space_2x`, `space_no_accel`, `turbo_spin_echo`) |
 | `flair` | `str \| None` | Absolute path to FLAIR NIfTI |
-| `bold` | `list[str] \| None` | List of paths to BOLD fMRI NIfTIs |
+| `bold_naming40` | `list[str] \| None` | List of paths to BOLD naming40 runs |
+| `bold_rest` | `list[str] \| None` | List of paths to BOLD rest runs |
 | `dwi` | `list[str] \| None` | List of paths to DWI NIfTIs |
+| `dwi_bvals` | `list[str] \| None` | List of bval file contents |
+| `dwi_bvecs` | `list[str] \| None` | List of bvec file contents |
 | `sbref` | `list[str] \| None` | List of paths to sbref NIfTIs |
 | `lesion` | `str \| None` | Absolute path to lesion mask NIfTI |
 | `age_at_stroke` | `float \| None` | Age at stroke |
 | `sex` | `str \| None` | Biological sex |
+| `race` | `str \| None` | Self-reported race |
 | `wab_aq` | `float \| None` | WAB Aphasia Quotient |
+| `wab_days` | `float \| None` | Days since stroke at WAB |
 | `wab_type` | `str \| None` | Aphasia type classification |
 
 ---
@@ -154,7 +159,7 @@ Get the HuggingFace Features schema for ARC.
 from bids_hub import get_arc_features
 
 features = get_arc_features()
-# Returns Features with 14 columns (7 imaging, 1 acquisition type, 4 demographic, 2 identifiers)
+# Returns Features with 19 columns
 ```
 
 **Returns:** `datasets.Features`
