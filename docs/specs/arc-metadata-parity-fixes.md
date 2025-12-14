@@ -28,7 +28,8 @@ The ARC dataset on HuggingFace is missing critical metadata that exists in the O
 
 ### 1. DWI Gradient Files
 
-**Location:** `/Users/ray/Desktop/CLARITY-DIGITAL-TWIN/bids-hub/data/openneuro/ds004884`
+**Location (audit environment):** `/Users/ray/Desktop/CLARITY-DIGITAL-TWIN/bids-hub/data/openneuro/ds004884`  
+**Note:** Use your local `ds004884` path when reproducing these checks.
 
 ```bash
 $ find . -name "*.bval" | wc -l
@@ -92,7 +93,7 @@ sub-M2221_ses-2332_task-naming40_acq-epfid2_dir-AP_run-23_bold.nii.gz
 
 **Verified counts:**
 ```text
-participants.tsv rows (data): 245 (wc -l shows 245 due to no trailing newline)
+participants.tsv data rows:         245 (plus 1 header row; file has no trailing newline)
 Actual sub-* directories:     230
 Subjects in TSV but no dir:   15 (sub-M2019, sub-M2085, sub-M2130, etc.)
 Subjects with NaN race:       2 (sub-M2001, sub-M2003) - both have directories
@@ -117,9 +118,15 @@ sub-M2182       F    27             w     802       79.2    Conduction
 sub-M2146       F    29             w     4696      96.8    None
 ```
 
+**Note:** `sub-M2231` is one of the 15 `participants.tsv` IDs with no `sub-*` directory, so it will not appear in the built HF dataset (which is derived from `sub-*/ses-*` folders).
+
 **Column descriptions:**
-- `race`: Self-reported race. **Values:** `b` (Black, n=52), `w` (White, n=191), NaN (n=2). No other values exist.
-- `wab_days`: Days since stroke when WAB assessment was collected. **Range:** 42 to 8798 days.
+- `race`: Self-reported race.
+  - All `participants.tsv` rows: `b` (Black, n=52), `w` (White, n=191), NaN (n=2). No other values exist.
+  - Subjects with directories (included in built dataset): `b` (n=47), `w` (n=181), NaN (n=2).
+- `wab_days`: Days since stroke when WAB assessment was collected.
+  - All `participants.tsv` rows: 42 to 8798 days.
+  - Subjects with directories (included in built dataset): 42 to 7998 days.
 
 ---
 
@@ -162,7 +169,7 @@ sub-M2146       F    29             w     4696      96.8    None
 **Location:** After `_extract_acquisition_type()` (~line 76)
 
 ```python
-def _read_gradient_file(nifti_path: str, extension: str) -> str | None:
+def _read_gradient_file(nifti_path: str, extension: str) -> str:
     """Read bval or bvec file content for a DWI NIfTI.
 
     DWI files in BIDS have companion gradient files with the same base name:
@@ -175,7 +182,10 @@ def _read_gradient_file(nifti_path: str, extension: str) -> str | None:
         extension: Either ".bval" or ".bvec"
 
     Returns:
-        File content as string (whitespace-stripped), or None if file doesn't exist.
+        File content as string (whitespace-stripped).
+
+    Raises:
+        FileNotFoundError: If the gradient file does not exist.
 
     Example:
         >>> _read_gradient_file("/data/sub-M2001_ses-1_dwi.nii.gz", ".bval")
@@ -193,7 +203,7 @@ def _read_gradient_file(nifti_path: str, extension: str) -> str | None:
         # WARNING not DEBUG: ARC has verified 1:1:1 match for all 2089 DWI files.
         # Missing gradient indicates data corruption, not expected absence.
         logger.warning("Gradient file not found (data corruption?): %s", gradient_path)
-        return None
+        raise FileNotFoundError(f"Missing gradient file: {gradient_path}")
 
     return gradient_path.read_text().strip()
 ```
@@ -231,13 +241,12 @@ dwi_bvecs = [_read_gradient_file(p, ".bvec") for p in dwi_paths]
 
 **CRITICAL INVARIANT:** `dwi`, `dwi_bvals`, and `dwi_bvecs` MUST have the same length and order:
 - `dwi[i]` corresponds to `dwi_bvals[i]` and `dwi_bvecs[i]`
-- If a gradient file is missing, the value is `None` (not omitted)
 - This allows: `for nifti, bval, bvec in zip(row["dwi"], row["dwi_bvals"], row["dwi_bvecs"])`
 
-**Type annotation:** `dwi_bvals: list[str | None]` and `dwi_bvecs: list[str | None]`
+**Type annotation:** `dwi_bvals: list[str]` and `dwi_bvecs: list[str]`
 
 **Note:** In OpenNeuro ds004884, ALL 2089 DWI files have matching bval/bvec (verified 1:1:1 match).
-The `None` handling is defensive for edge cases in other datasets.
+Fail fast on missing gradients to prevent pushing unusable DWI data.
 
 #### 1.4 Update Tests
 
@@ -278,14 +287,14 @@ class TestReadGradientFile:
         result = _read_gradient_file(str(nifti), ".bval")
         assert result == "0 1000 2000"
 
-    def test_returns_none_when_missing(self, tmp_path: Path) -> None:
+    def test_raises_when_missing(self, tmp_path: Path) -> None:
         nifti = tmp_path / "sub-M2001_ses-1_dwi.nii.gz"
         nifti.touch()
-        # No .bval file created
+        # No .bval file created -> should raise
 
         from bids_hub.datasets.arc import _read_gradient_file
-        result = _read_gradient_file(str(nifti), ".bval")
-        assert result is None
+        with pytest.raises(FileNotFoundError):
+            _read_gradient_file(str(nifti), ".bval")
 
     def test_logs_warning_when_missing(
         self, tmp_path: Path, caplog: pytest.LogCaptureFixture
@@ -296,7 +305,7 @@ class TestReadGradientFile:
         # No .bval file created
 
         from bids_hub.datasets.arc import _read_gradient_file
-        with caplog.at_level(logging.WARNING):
+        with caplog.at_level(logging.WARNING), pytest.raises(FileNotFoundError):
             _read_gradient_file(str(nifti), ".bval")
 
         # Verify warning was logged (not debug)
@@ -347,19 +356,16 @@ bold_paths = find_all_niftis(session_dir / "func", "*_bold.nii.gz")
 ```python
 # Find functional modalities in func/ - split by task
 bold_all = find_all_niftis(session_dir / "func", "*_bold.nii.gz")
-bold_naming40 = [p for p in bold_all if "task-naming40" in p]
-bold_rest = [p for p in bold_all if "task-rest" in p]
+bold_naming40 = [p for p in bold_all if "task-naming40" in p.lower()]
+bold_rest = [p for p in bold_all if "task-rest" in p.lower()]
 
 # GUARDRAIL: Detect unexpected tasks to prevent silent data loss
 # ARC only has naming40 and rest tasks - any other task is a bug
-unexpected = [p for p in bold_all if "task-naming40" not in p and "task-rest" not in p]
+unexpected = [p for p in bold_all if "task-naming40" not in p.lower() and "task-rest" not in p.lower()]
 if unexpected:
-    logger.warning(
-        "Found %d BOLD files with unexpected task types (not naming40/rest) for %s/%s: %s",
-        len(unexpected),
-        subject_id,
-        session_id,
-        unexpected[:3],  # Log first 3 to avoid log spam
+    raise ValueError(
+        f"Unexpected BOLD task(s) (not naming40/rest) for {subject_id}/{session_id}: "
+        f"{[Path(p).name for p in unexpected[:3]]} (showing up to 3)"
     )
 ```
 
@@ -441,21 +447,42 @@ def test_bold_split_by_task(self, synthetic_bids_root: Path) -> None:
     assert all("task-rest" in p for p in ses1["bold_rest"])
 
 
-def test_bold_unexpected_task_logs_warning(
-    self, synthetic_bids_root: Path, caplog: pytest.LogCaptureFixture
+def test_bold_unexpected_task_raises(
+    self, synthetic_bids_root: Path
 ) -> None:
-    """Verify unexpected BOLD task types trigger a warning."""
+    """Unexpected BOLD task types should fail fast (prevent silent data loss)."""
     # Create a BOLD file with unexpected task
     func_dir = synthetic_bids_root / "sub-M2001" / "ses-1" / "func"
     unexpected_bold = func_dir / "sub-M2001_ses-1_task-unknown_run-01_bold.nii.gz"
     _create_minimal_nifti(unexpected_bold)
 
-    with caplog.at_level(logging.WARNING):
+    with pytest.raises(ValueError, match=r"Unexpected BOLD task"):
         build_arc_file_table(synthetic_bids_root)
-
-    # Verify warning was logged
-    assert any("unexpected task types" in record.message for record in caplog.records)
 ```
+
+---
+
+### Required Test Suite Updates (TDD)
+
+This spec changes the ARC schema (new columns + `bold` rename), so update the existing test suite accordingly:
+
+1. Update `TestBuildArcFileTable.test_build_file_table_has_correct_columns` expected columns:
+   - Remove: `bold`
+   - Add: `bold_naming40`, `bold_rest`, `dwi_bvals`, `dwi_bvecs`, `race`, `wab_days`
+
+2. Update any assertions that reference `ses["bold"]` to use `ses["bold_naming40"]` and `ses["bold_rest"]`.
+
+3. Add an integration assertion for DWI gradients on the synthetic fixture:
+   - `len(row["dwi"]) == len(row["dwi_bvals"]) == len(row["dwi_bvecs"])`
+   - Verify at least one known `.bval` and `.bvec` content string matches the fixture text.
+
+4. Add assertions for the new demographic/clinical columns:
+   - `race` should be a `str | None` (preferably set one fixture row to `NaN` to validate `None` output).
+   - `wab_days` should be a `float | None`.
+
+5. Update `TestGetArcFeatures`:
+   - Replace `"bold": Sequence(Nifti())` checks with `bold_naming40` and `bold_rest`.
+   - Add checks for `dwi_bvals`/`dwi_bvecs` as `Sequence(Value("string"))`, and `race`/`wab_days` as `Value(...)`.
 
 ---
 
@@ -634,15 +661,15 @@ uv run bids-hub arc build /path/to/ds004884 --dry-run
 
 ## Documentation Updates Required
 
-The `bold → bold_naming40 + bold_rest` change affects these files:
+The ARC schema changes in this spec (BOLD task split + new columns) affect these files:
 
 | File | Current | Required Update |
 |------|---------|-----------------|
-| `docs/reference/schema.md:24` | `"bold": Sequence(Nifti())` | Replace with `bold_naming40` and `bold_rest` |
-| `docs/reference/api.md:138` | `bold` column documented | Replace with two columns |
-| `docs/how-to/validate-before-upload.md:34` | `multi_run_cols = ["bold", "dwi", "sbref"]` | Replace `bold` with `bold_naming40`, `bold_rest` |
-| `docs/explanation/architecture.md:82` | `- bold: Multiple fMRI runs per session` | Update description |
-| `CLAUDE.md` (ARC schema section) | Uses `bold` | Replace with two columns |
+| `docs/reference/schema.md:24` | ARC schema lists `"bold": Sequence(Nifti())` and lacks new columns | Update ARC schema to 19 columns (replace `bold`, add `dwi_bvals`, `dwi_bvecs`, `race`, `wab_days`) |
+| `docs/reference/api.md:138` | ARC API docs list `bold` and 14 total columns | Update column list + count (14 → 19) and reflect `bold_naming40`/`bold_rest` + new columns |
+| `docs/how-to/validate-before-upload.md:34` | `multi_run_cols = ["bold", "dwi", "sbref"]` | Replace `bold` with `bold_naming40`, `bold_rest` (and update example outputs accordingly) |
+| `docs/explanation/architecture.md:82` | `- bold: Multiple fMRI runs per session` | Update to `bold_naming40`/`bold_rest` (and mention DWI gradients if described) |
+| `CLAUDE.md` (ARC schema section) | Uses `bold` and lacks new columns | Update ARC schema to match the new 19-column SSOT |
 
 **Not affected (other datasets):**
 - `docs/issues/003a_aomic_piop1.md` - AOMIC dataset, not ARC
@@ -652,17 +679,29 @@ The `bold → bold_naming40 + bold_rest` change affects these files:
 
 ## Separate Issue: Validation Expected Counts
 
-**IMPORTANT:** This spec does NOT fix validation expected counts, but documents the discrepancy:
+**IMPORTANT:** This spec does NOT fix validation, but documents the current SSOT mismatch so the "validate then upload" workflow is not misleading.
 
-| Modality | Expected (validation/arc.py) | Actual (OpenNeuro) | Status |
-|----------|------------------------------|--------------------|---------|
-| `lesion` | 230 | **228** | ❌ Mismatch |
+### What fails today (first-principles, pinned OpenNeuro data)
 
-The validation at `src/bids_hub/validation/arc.py:31` expects 230 lesion masks, but OpenNeuro ds004884 only has 228.
+Running `uv run bids-hub arc validate <ds004884>` against the SSOT dataset currently fails on:
 
-**Impact:** `uv run bids-hub arc validate` will fail on valid data.
+| Check | Expected (src/bids_hub/validation/arc.py) | Actual (SSOT) | Root Cause |
+|------:|------------------------------------------:|--------------:|-----------|
+| `t2w_count` | 447 | 440 | Expected counts are not aligned with the validator’s session-counting semantics |
+| `flair_count` | 235 | 233 | Same as above (session-counting vs expected values) |
+| `lesion_count` | 230 | 0 | Lesion masks live under `derivatives/`, but validation only scans `sub-*/ses-*` |
 
-**Recommendation:** Create separate PR to fix validation counts after this parity spec is merged. Do NOT block metadata parity on validation fix.
+Separately, the SSOT dataset contains **228** lesion mask NIfTIs in `derivatives/lesion_masks`, not 230:
+`find derivatives/lesion_masks -name '*_desc-lesion_mask.nii.gz' | wc -l  # 228`
+
+**Impact:** `uv run bids-hub arc validate` currently fails on valid SSOT data, and `docs/tutorials/upload-arc.md` is misleading until validation is fixed.
+
+**Recommendation (separate PR):**
+- Update validation to count lesion masks in `derivatives/lesion_masks/...` (not under raw `sub-*/ses-*`)
+- Align expected counts with the validator’s counting semantics (sessions vs raw file counts)
+- Update the ARC upload tutorial to match the corrected validator behavior
+
+Do NOT block metadata parity on the validation fix.
 
 ---
 
@@ -692,9 +731,14 @@ The validation at `src/bids_hub/validation/arc.py:31` expects 230 lesion masks, 
 
 ## Changelog
 
+- **2025-12-14 (v5):** Make guardrails non-lossy + fix validation facts
+  - Made BOLD task guardrail fail-fast (no silent dropping of unknown tasks)
+  - Made missing DWI gradients fail-fast (DWI unusable without bval/bvec; SSOT is 1:1:1)
+  - Corrected validation section to match actual SSOT validator output and root causes
+
 - **2025-12-13 (v4):** Addressed spec completeness gaps
-  - Added BOLD task guardrail to detect unexpected tasks and prevent silent data loss
-  - Changed gradient missing log level: `debug` → `warning` (ARC has 1:1:1 match, missing = corruption)
+  - Added BOLD task guardrail to detect unexpected tasks
+  - Changed gradient missing log level: `debug` → `warning`
   - Added "Documentation Updates Required" section enumerating all files affected by bold split
   - Added "Separate Issue: Validation Expected Counts" documenting lesion 230→228 discrepancy
   - Updated post-implementation checklist to include doc updates
@@ -720,4 +764,4 @@ The validation at `src/bids_hub/validation/arc.py:31` expects 230 lesion masks, 
 
 ---
 
-**Reviewed by:** _v4 - Spec completeness gaps addressed. Ready for final approval._
+**Reviewed by:** _v5 - Guardrails + validation facts corrected. Ready for implementation._
