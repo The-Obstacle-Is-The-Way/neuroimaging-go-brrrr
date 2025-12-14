@@ -90,6 +90,13 @@ sub-M2221_ses-2332_task-naming40_acq-epfid2_dir-AP_run-23_bold.nii.gz
 
 **Source file:** `ds004884/participants.tsv`
 
+**Verified counts:**
+```text
+participants.tsv rows (data): 244
+Actual sub-* directories:     230
+Subjects in TSV but no dir:   15 (sub-M2019, sub-M2085, sub-M2130, etc.)
+```
+
 ```bash
 $ head -1 participants.tsv | tr '\t' '\n' | cat -n
      1  participant_id
@@ -110,8 +117,8 @@ sub-M2146       F    29             w     4696      96.8    None
 ```
 
 **Column descriptions:**
-- `race`: Self-reported race (b=Black, w=White, etc.)
-- `wab_days`: Days since stroke when WAB assessment was collected (range: ~800-8800)
+- `race`: Self-reported race. **Values:** `b` (Black, n=52), `w` (White, n=191), NaN (n=2). No other values exist.
+- `wab_days`: Days since stroke when WAB assessment was collected. **Range:** 42 to 8798 days.
 
 ---
 
@@ -219,16 +226,33 @@ dwi_bvecs = [_read_gradient_file(p, ".bvec") for p in dwi_paths]
 "dwi_bvecs": Sequence(Value("string")),  # NEW
 ```
 
+**CRITICAL INVARIANT:** `dwi`, `dwi_bvals`, and `dwi_bvecs` MUST have the same length and order:
+- `dwi[i]` corresponds to `dwi_bvals[i]` and `dwi_bvecs[i]`
+- If a gradient file is missing, the value is `None` (not omitted)
+- This allows: `for nifti, bval, bvec in zip(row["dwi"], row["dwi_bvals"], row["dwi_bvecs"])`
+
 #### 1.4 Update Tests
 
 **File:** `tests/test_arc.py`
 
-**Add to `synthetic_bids_root` fixture after DWI NIfTI creation:**
+**IMPORTANT:** The existing test fixture creates DWI files with run numbers:
 ```python
-# Create gradient files alongside DWI
+# Existing fixture (lines 102-110):
+root / "sub-M2001" / "ses-1" / "dwi" / "sub-M2001_ses-1_run-01_dwi.nii.gz"
+root / "sub-M2001" / "ses-1" / "dwi" / "sub-M2001_ses-1_run-02_dwi.nii.gz"
+root / "sub-M2001" / "ses-1" / "dwi" / "sub-M2001_ses-1_run-03_dwi.nii.gz"
+```
+
+**Add gradient files matching each DWI run (after DWI NIfTI creation):**
+```python
+# Create gradient files alongside each DWI run
 dwi_dir = root / "sub-M2001" / "ses-1" / "dwi"
-(dwi_dir / "sub-M2001_ses-1_dwi.bval").write_text("0 1000 2000")
-(dwi_dir / "sub-M2001_ses-1_dwi.bvec").write_text("1 0 0\n0 1 0\n0 0 1")
+(dwi_dir / "sub-M2001_ses-1_run-01_dwi.bval").write_text("0 1000 2000")
+(dwi_dir / "sub-M2001_ses-1_run-01_dwi.bvec").write_text("1 0 0\n0 1 0\n0 0 1")
+(dwi_dir / "sub-M2001_ses-1_run-02_dwi.bval").write_text("0 1000")
+(dwi_dir / "sub-M2001_ses-1_run-02_dwi.bvec").write_text("1 0\n0 1\n0 0")
+(dwi_dir / "sub-M2001_ses-1_run-03_dwi.bval").write_text("0 500 1000 1500")
+(dwi_dir / "sub-M2001_ses-1_run-03_dwi.bvec").write_text("1 0 0 0\n0 1 0 0\n0 0 1 0")
 ```
 
 **Add test class:**
@@ -319,27 +343,40 @@ bold_rest = [p for p in bold_all if "task-rest" in p]
 
 #### 2.4 Update Tests
 
-**Add to `synthetic_bids_root` fixture:**
+**IMPORTANT:** The existing fixture already has two `task-rest` BOLD files (lines 95-100):
 ```python
-# Create BOLD files with different tasks
+# Existing fixture:
+root / "sub-M2001" / "ses-1" / "func" / "sub-M2001_ses-1_task-rest_run-01_bold.nii.gz"
+root / "sub-M2001" / "ses-1" / "func" / "sub-M2001_ses-1_task-rest_run-02_bold.nii.gz"
+```
+
+**Add one `task-naming40` file to test task splitting:**
+```python
+# ADD this after existing BOLD files:
 func_dir = root / "sub-M2001" / "ses-1" / "func"
 _create_minimal_nifti(func_dir / "sub-M2001_ses-1_task-naming40_run-01_bold.nii.gz")
-_create_minimal_nifti(func_dir / "sub-M2001_ses-1_task-rest_run-01_bold.nii.gz")
-_create_minimal_nifti(func_dir / "sub-M2001_ses-1_task-rest_run-02_bold.nii.gz")
 ```
+
+**Result:** Session will have 2 rest + 1 naming40 = 3 total BOLD files
 
 **Add assertions:**
 ```python
 def test_bold_split_by_task(self, synthetic_bids_root: Path) -> None:
+    """Verify BOLD files are correctly split by task entity."""
     df = build_arc_file_table(synthetic_bids_root)
     ses1 = df[(df["subject_id"] == "sub-M2001") & (df["session_id"] == "ses-1")].iloc[0]
 
+    # Verify types
     assert isinstance(ses1["bold_naming40"], list)
     assert isinstance(ses1["bold_rest"], list)
+
+    # Verify counts (1 naming40 + 2 rest from fixture)
     assert len(ses1["bold_naming40"]) == 1
     assert len(ses1["bold_rest"]) == 2
+
+    # Verify task entities in paths
     assert "task-naming40" in ses1["bold_naming40"][0]
-    assert "task-rest" in ses1["bold_rest"][0]
+    assert all("task-rest" in p for p in ses1["bold_rest"])
 ```
 
 ---
@@ -423,9 +460,16 @@ if wab_days_raw is not None and pd.notna(wab_days_raw):
 
 ---
 
-## New Schema (18 columns)
+## New Schema (19 columns)
 
-After all changes, the ARC dataset will have 18 columns (up from 14):
+After all changes, the ARC dataset will have **19 columns** (up from 14):
+
+**Column count breakdown:**
+- Current HF: 13 columns
+- + t2w_acquisition (code done, not pushed): 14 columns
+- + race, wab_days: 16 columns
+- + dwi_bvals, dwi_bvecs: 18 columns
+- + bold_naming40, bold_rest (replaces bold): 19 columns (net +1)
 
 ```python
 Features({
@@ -535,10 +579,18 @@ uv run bids-hub arc build /path/to/ds004884 --dry-run
 
 ## Changelog
 
+- **2025-12-13 (v2):** Fixed inaccuracies based on senior review
+  - Fixed column count: 19 (was incorrectly stated as 18)
+  - Fixed race values: only `b` and `w` exist (removed "etc.")
+  - Fixed wab_days range: 42-8798 (was incorrectly stated as ~800-8800)
+  - Added participant vs subject count clarification (244 in TSV, 230 with directories)
+  - Fixed test fixture instructions to match existing DWI naming (`_run-01_dwi.nii.gz`)
+  - Added dwi/dwi_bvals/dwi_bvecs alignment invariant
+
 - **2025-12-13 (v1):** Initial spec created based on audit findings
   - Covers P0: DWI gradients, BOLD task separation
   - Covers P1: race, wab_days columns
 
 ---
 
-**Reviewed by:** _Pending senior review_
+**Reviewed by:** _Pending final approval_

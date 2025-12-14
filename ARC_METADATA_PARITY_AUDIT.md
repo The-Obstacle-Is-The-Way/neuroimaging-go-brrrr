@@ -63,13 +63,13 @@ sub-M2005	F	31	w	4334	54.8	Broca
 
 #### `race`
 - **Description:** Self-reported race of participant
-- **Values observed:** `b` (Black), `w` (White), and others
+- **Values observed:** `b` (Black, n=52), `w` (White, n=191), NaN (n=2). **No other values exist.**
 - **Use case:** Demographic analysis, bias auditing in ML models
 - **Source:** `participants.json` does not document this column (undocumented in BIDS sidecar)
 
 #### `wab_days`
 - **Description:** Days since participant's stroke when WAB assessment was collected
-- **Values observed:** Range from ~800 to ~8800 days
+- **Values observed:** Range from **42 to 8798 days** (verified from source)
 - **Use case:** Longitudinal analysis, understanding chronic phase timing
 - **Source:** Documented in `participants.json`:
   ```json
