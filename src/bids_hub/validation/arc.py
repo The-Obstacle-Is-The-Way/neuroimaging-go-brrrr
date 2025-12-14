@@ -9,26 +9,70 @@ from pathlib import Path
 
 from .base import (
     DatasetValidationConfig,
+    ValidationCheck,
     ValidationResult,
+    check_count,
     validate_dataset,
 )
 
-# Expected counts from Sci Data paper (Gibson et al., 2024)
-# doi:10.1038/s41597-024-03819-7
-# Note: BOLD/DWI/sbref counts are sessions with at least one file of that type
-# (the raw file counts are higher due to multiple runs/acquisitions per session)
+
+def _check_lesion_masks(bids_root: Path) -> ValidationCheck:
+    """Count lesion masks in derivatives/lesion_masks/.
+
+    ARC lesion masks live in derivatives/lesion_masks/sub-*/ses-*/anat/
+    rather than in the raw BIDS tree. The generic modality counter
+    only searches sub-*/ses-*/, so we need this custom check.
+
+    Verified against SSOT (OpenNeuro ds004884): 228 lesion masks.
+    """
+    lesion_dir = bids_root / "derivatives" / "lesion_masks"
+    if not lesion_dir.exists():
+        return ValidationCheck(
+            name="lesion_count",
+            expected=">= 228 (target: 228)",
+            actual="0",
+            passed=False,
+            details="derivatives/lesion_masks/ directory not found",
+        )
+
+    # Count unique sessions with lesion masks
+    lesion_files = list(lesion_dir.rglob("*_desc-lesion_mask.nii.gz"))
+    # For ARC, we count raw files since each session has exactly 0 or 1 lesion mask
+    actual = len(lesion_files)
+    return check_count("lesion_count", actual, expected=228, tolerance=0.0)
+
+
+# Expected counts verified against SSOT (OpenNeuro ds004884, 2025-12-14).
+#
+# IMPORTANT: The validator counts SESSIONS with at least one file of each modality,
+# NOT raw file counts. This explains discrepancies vs. the Sci Data paper counts:
+#
+# | Modality | Paper Claims | Raw Files (SSOT) | Sessions w/ Modality |
+# |----------|--------------|------------------|----------------------|
+# | T1w      | 447          | 444              | 444 (1:1 mapping)    |
+# | T2w      | 447          | 441              | 440 (1 session has 2)|
+# | FLAIR    | 235          | 235              | 233 (2 sessions have 2)|
+# | BOLD     | 1,402        | 1,402            | 850 (multiple runs)  |
+# | DWI      | 2,089        | 2,089            | 613 (multiple runs)  |
+# | sbref    | 322          | 322              | 88 (multiple runs)   |
+# | Lesion   | 228          | 228              | 228 (in derivatives) |
+#
+# For raw multi-run modalities (BOLD/DWI/sbref), the paper correctly reports
+# "sessions" not "files", so those match. Structural modalities (T1w/T2w/FLAIR)
+# are reported as raw file counts in the paper but we count sessions.
 ARC_VALIDATION_CONFIG = DatasetValidationConfig(
     name="arc",
     expected_counts={
         "subjects": 230,
         "sessions": 902,
-        "t1w": 441,
-        "t2w": 447,
-        "flair": 235,
+        "t1w": 444,  # Sessions with T1w (verified from SSOT)
+        "t2w": 440,  # Sessions with T2w (441 files, 1 session has 2)
+        "flair": 233,  # Sessions with FLAIR (235 files, 2 sessions have 2)
         "bold": 850,  # Sessions with BOLD fMRI
         "dwi": 613,  # Sessions with diffusion imaging
         "sbref": 88,  # Sessions with single-band reference
-        "lesion": 230,  # All subjects have lesion masks
+        # NOTE: lesion is handled by custom check (_check_lesion_masks)
+        # because masks live in derivatives/, not raw sub-*/ses-*/
     },
     required_files=[
         "dataset_description.json",
@@ -42,23 +86,24 @@ ARC_VALIDATION_CONFIG = DatasetValidationConfig(
         "bold": "*_bold.nii.gz",
         "dwi": "*_dwi.nii.gz",
         "sbref": "*_sbref.nii.gz",
-        "lesion": "*_desc-lesion_mask.nii.gz",
+        # NOTE: lesion not included here - handled by custom check
     },
-    custom_checks=[],  # ARC doesn't need custom checks beyond generic
+    custom_checks=[_check_lesion_masks],
 )
 
 
 # Backward compatibility aliases - preserve old API
+# NOTE: These are SESSIONS with modality, not raw file counts (see comment above)
 EXPECTED_COUNTS = {
     "subjects": 230,
     "sessions": 902,
-    "t1w_series": 441,
-    "t2w_series": 447,
-    "flair_series": 235,
-    "bold_series": 850,
-    "dwi_series": 613,
-    "sbref_series": 88,
-    "lesion_masks": 230,
+    "t1w_series": 444,  # Sessions with T1w
+    "t2w_series": 440,  # Sessions with T2w
+    "flair_series": 233,  # Sessions with FLAIR
+    "bold_series": 850,  # Sessions with BOLD
+    "dwi_series": 613,  # Sessions with DWI
+    "sbref_series": 88,  # Sessions with sbref
+    "lesion_masks": 228,  # Lesion masks in derivatives (verified)
 }
 
 REQUIRED_BIDS_FILES = [

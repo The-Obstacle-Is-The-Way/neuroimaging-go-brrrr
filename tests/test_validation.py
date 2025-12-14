@@ -143,8 +143,9 @@ def test_expected_counts_matches_config() -> None:
     assert EXPECTED_COUNTS["sessions"] == ARC_VALIDATION_CONFIG.expected_counts["sessions"]
     # T1w (legacy uses t1w_series)
     assert EXPECTED_COUNTS["t1w_series"] == ARC_VALIDATION_CONFIG.expected_counts["t1w"]
-    # Lesion masks (legacy uses lesion_masks)
-    assert EXPECTED_COUNTS["lesion_masks"] == ARC_VALIDATION_CONFIG.expected_counts["lesion"]
+    # Lesion masks: handled by custom check, not in expected_counts
+    # The backward compat alias stores the expected count (228), verified against SSOT
+    assert EXPECTED_COUNTS["lesion_masks"] == 228
 
 
 def test_required_bids_files_matches_config() -> None:
