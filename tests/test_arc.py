@@ -279,7 +279,7 @@ class TestBuildArcFileTable:
         assert sub2_ses1["dwi_bvecs"] == []
         assert sub2_ses1["sbref"] == []  # No dwi/ (empty list)
         assert sub2_ses1["lesion"] is not None
-        
+
         # Verify race and wab_days for sub-M2002
         assert sub2_ses1["race"] == "w"
         assert sub2_ses1["wab_days"] == 3682.0
@@ -301,9 +301,7 @@ class TestBuildArcFileTable:
         assert "task-naming40" in ses1["bold_naming40"][0]
         assert all("task-rest" in p for p in ses1["bold_rest"])
 
-    def test_bold_unexpected_task_raises(
-        self, synthetic_bids_root: Path
-    ) -> None:
+    def test_bold_unexpected_task_raises(self, synthetic_bids_root: Path) -> None:
         """Unexpected BOLD task types should fail fast (prevent silent data loss)."""
         # Create a BOLD file with unexpected task
         func_dir = synthetic_bids_root / "sub-M2001" / "ses-1" / "func"
@@ -357,6 +355,7 @@ class TestReadGradientFile:
         bval.write_text("0 1000 2000\n")
 
         from bids_hub.datasets.arc import _read_gradient_file
+
         result = _read_gradient_file(str(nifti), ".bval")
         assert result == "0 1000 2000"
 
@@ -366,6 +365,7 @@ class TestReadGradientFile:
         # No .bval file created -> should raise
 
         from bids_hub.datasets.arc import _read_gradient_file
+
         with pytest.raises(FileNotFoundError):
             _read_gradient_file(str(nifti), ".bval")
 
@@ -374,11 +374,13 @@ class TestReadGradientFile:
     ) -> None:
         """Missing gradient file should log WARNING (not debug) for ARC."""
         import logging
+
         nifti = tmp_path / "sub-M2001_ses-1_dwi.nii.gz"
         nifti.touch()
         # No .bval file created
 
         from bids_hub.datasets.arc import _read_gradient_file
+
         with caplog.at_level(logging.WARNING), pytest.raises(FileNotFoundError):
             _read_gradient_file(str(nifti), ".bval")
 
@@ -424,7 +426,7 @@ class TestGetArcFeatures:
         from datasets import Sequence, Value
 
         features = get_arc_features()
-        
+
         assert isinstance(features["dwi_bvals"], Sequence)
         assert isinstance(features["dwi_bvecs"], Sequence)
         # Check inner type is string

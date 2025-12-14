@@ -262,7 +262,7 @@ def build_arc_file_table(bids_root: Path) -> pd.DataFrame:
 
             # Find diffusion modalities in dwi/ (ALL runs)
             dwi_paths = find_all_niftis(session_dir / "dwi", "*_dwi.nii.gz")
-            
+
             # Read gradient files for each DWI run
             dwi_bvals = [_read_gradient_file(p, ".bval") for p in dwi_paths]
             dwi_bvecs = [_read_gradient_file(p, ".bvec") for p in dwi_paths]
