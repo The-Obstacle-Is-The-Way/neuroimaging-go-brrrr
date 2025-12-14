@@ -29,18 +29,10 @@ Ensure data integrity before uploading:
 uv run bids-hub arc validate data/openneuro/ds004884
 ```
 
-Expected output:
-
-```text
-Validation Results for: data/openneuro/ds004884
-============================================================
-✅ PASS bids_required_files
-✅ PASS subjects
-✅ PASS participants_tsv
-✅ PASS t1w_sessions
-...
-✅ All validations passed! Data is ready for HF push.
-```
+Note: `bids-hub arc validate` currently performs useful corruption/structure checks, but some
+ARC modality-count checks are known to be out-of-sync with the SSOT layout (e.g., lesion masks
+live under `derivatives/`). If the integrity checks pass, proceed to the build step and use the
+file-table checks in `docs/how-to/validate-before-upload.md` for upload readiness.
 
 ---
 
