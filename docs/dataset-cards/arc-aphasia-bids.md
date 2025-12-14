@@ -174,7 +174,7 @@ for session in ds:
 
 ## Changelog
 
-### v2 (December 2024)
+### v2 (December 2025)
 
 - **BREAKING:** `bold` column split into `bold_naming40` and `bold_rest` for task-specific analysis
 - **NEW:** `dwi_bvals` and `dwi_bvecs` columns for diffusion gradient information
