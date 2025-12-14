@@ -133,9 +133,10 @@ def validate_arc(
     Validate an ARC dataset download before pushing to HuggingFace.
 
     Checks:
-    - Required BIDS files exist (dataset_description.json, participants.tsv)
-    - Subject count matches expected (~230 from Sci Data paper)
-    - Series counts match paper (T1w: 441, T2w: 447, FLAIR: 235)
+    - Zero-byte file detection (fast corruption check)
+    - Required BIDS files exist (dataset_description.json, participants.tsv, participants.json)
+    - Subject/session counts match SSOT expectations (OpenNeuro ds004884)
+    - Modality counts match SSOT expectations (sessions with ≥1 file)
     - Sample NIfTI files are loadable with nibabel
     - (Optional) External BIDS validator passes
 
@@ -234,11 +235,11 @@ def info_arc() -> None:
     typer.echo("  - Expert lesion masks")
     typer.echo("  - WAB (Western Aphasia Battery) scores")
     typer.echo("")
-    typer.echo("Expected series counts (from Sci Data paper):")
-    typer.echo("  - T1w: 441 series")
-    typer.echo("  - T2w: 447 series")
-    typer.echo("  - FLAIR: 235 series")
-    typer.echo("  - Lesion masks: 230")
+    typer.echo("SSOT modality counts (used by `bids-hub arc validate`):")
+    typer.echo("  - T1w: 444 sessions")
+    typer.echo("  - T2w: 440 sessions")
+    typer.echo("  - FLAIR: 233 sessions")
+    typer.echo("  - Lesion masks: 228 sessions (derivatives/lesion_masks)")
 
 
 # --- ISLES'24 Commands ---

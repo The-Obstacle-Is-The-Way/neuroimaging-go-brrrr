@@ -6,7 +6,7 @@ Dataset-specific validation (ARC, ISLES24) should be in their respective modules
 Architecture follows Single Responsibility Principle:
 - hf.py: Generic HF validation classes (this file)
 - arc.py: ARC-specific validation (OpenNeuro + HuggingFace)
-- isles24.py: ISLES24-specific validation (Zenodo + HuggingFace)
+- isles24.py: ISLES24-specific validation (Zenodo download)
 """
 
 from __future__ import annotations
@@ -87,9 +87,7 @@ class HFValidationResult:
         if self.passed:
             lines.append("✅ All validations passed! HF dataset matches SSOT.")
         else:
-            lines.append(
-                f"❌ {self.failed_count}/{len(self.checks)} checks failed."
-            )
+            lines.append(f"❌ {self.failed_count}/{len(self.checks)} checks failed.")
         return "\n".join(lines)
 
 

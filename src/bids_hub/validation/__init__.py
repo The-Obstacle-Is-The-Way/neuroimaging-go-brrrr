@@ -4,7 +4,7 @@ Architecture (SOLID - Single Responsibility Principle):
 - base.py: Generic BIDS/OpenNeuro validation framework
 - hf.py: Generic HuggingFace validation framework
 - arc.py: ARC-specific validation (OpenNeuro + HuggingFace)
-- isles24.py: ISLES24-specific validation (Zenodo + HuggingFace)
+- isles24.py: ISLES24-specific validation (Zenodo download)
 """
 
 # --- Generic BIDS validation (base.py) ---
