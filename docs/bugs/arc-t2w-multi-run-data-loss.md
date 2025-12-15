@@ -54,10 +54,12 @@ The JSON metadata for both runs is **identical** (same protocol, sequence, param
 
 **Principle:** Mirror OpenNeuro exactly. Upload ALL data. Let downstream users filter.
 
-From the [Scientific Data paper](https://www.nature.com/articles/s41597-024-03819-7):
-> "Modalities include T1-weighted (229 individuals, **441 series**), T2-weighted (229, **447**)..."
+**SSOT file counts** (verified from `data/openneuro/ds004884/`):
+- T1w: 447 files across 444 sessions
+- T2w: 441 files across 440 sessions
+- FLAIR: 235 files across 233 sessions
 
-447 T2w series across 229 individuals = some have multiple runs. OpenNeuro kept them all. **So should we.**
+OpenNeuro kept all files including multi-run sessions. **So should we.**
 
 ### Schema Change
 
@@ -120,8 +122,8 @@ After fix, this should return **223** (not 222):
 # Count SPACE samples with lesion masks
 space_samples = ds.filter(
     lambda x: (
-        len(x["lesion"]) > 0  # has lesion
-        and len(x["t2w"]) > 0  # has at least one T2w
+        x["lesion"] is not None  # has lesion (single Nifti, not list)
+        and len(x["t2w"]) > 0    # has at least one T2w (list after v4)
         and x["t2w_acquisition"] in ("space_2x", "space_no_accel")
     )
 )
