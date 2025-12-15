@@ -15,6 +15,9 @@ from .datasets import (
     get_isles24_features,
 )
 
+# Patches (opt-in)
+from .patches import apply_nifti_lazy_loading_patch
+
 # Validation
 from .validation import (
     ValidationResult,
@@ -28,6 +31,7 @@ __all__ = [
     "DatasetBuilderConfig",
     "ValidationResult",
     "__version__",
+    "apply_nifti_lazy_loading_patch",
     "build_and_push_arc",
     "build_and_push_isles24",
     "build_arc_file_table",
