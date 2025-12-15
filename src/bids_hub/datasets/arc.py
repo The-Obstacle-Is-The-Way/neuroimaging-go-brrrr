@@ -138,10 +138,10 @@ def build_arc_file_table(bids_root: Path) -> pd.DataFrame:
         DataFrame with columns:
             - subject_id (str): BIDS subject identifier (e.g., "sub-M2001")
             - session_id (str): BIDS session identifier (e.g., "ses-1")
-            - t1w (str | None): Absolute path to T1-weighted NIfTI
-            - t2w (str | None): Absolute path to T2-weighted NIfTI
+            - t1w (list[str]): Absolute paths to T1-weighted NIfTIs (empty if none)
+            - t2w (list[str]): Absolute paths to T2-weighted NIfTIs (empty if none)
             - t2w_acquisition (str | None): Acquisition type for T2w (e.g., "space_2x")
-            - flair (str | None): Absolute path to FLAIR NIfTI
+            - flair (list[str]): Absolute paths to FLAIR NIfTIs (empty if none)
             - bold_naming40 (list[str]): Paths to BOLD runs for picture naming task
             - bold_rest (list[str]): Paths to BOLD runs for resting state
             - dwi (list[str]): List of absolute paths to ALL DWI runs
@@ -236,11 +236,14 @@ def build_arc_file_table(bids_root: Path) -> pd.DataFrame:
         for session_dir in session_dirs:
             session_id = session_dir.name  # e.g., "ses-1"
 
-            # Find structural modalities in anat/ (single file per session)
-            t1w_path = find_single_nifti(session_dir / "anat", "*_T1w.nii.gz")
-            t2w_path = find_single_nifti(session_dir / "anat", "*_T2w.nii.gz")
-            t2w_acquisition = _extract_acquisition_type(t2w_path)
-            flair_path = find_single_nifti(session_dir / "anat", "*_FLAIR.nii.gz")
+            # Find structural modalities in anat/ (can have multiple runs)
+            t1w_paths = find_all_niftis(session_dir / "anat", "*_T1w.nii.gz")
+            t2w_paths = find_all_niftis(session_dir / "anat", "*_T2w.nii.gz")
+
+            # Use first T2w for acquisition type (all runs in a session use same sequence)
+            t2w_acquisition = _extract_acquisition_type(t2w_paths[0]) if t2w_paths else None
+
+            flair_paths = find_all_niftis(session_dir / "anat", "*_FLAIR.nii.gz")
 
             # Find functional modalities in func/ (ALL runs) - split by task
             # NOTE: BIDS is case-sensitive; verified SSOT has only lowercase task names
@@ -277,10 +280,10 @@ def build_arc_file_table(bids_root: Path) -> pd.DataFrame:
                 {
                     "subject_id": subject_id,
                     "session_id": session_id,
-                    "t1w": t1w_path,
-                    "t2w": t2w_path,
+                    "t1w": t1w_paths,
+                    "t2w": t2w_paths,
                     "t2w_acquisition": t2w_acquisition,
-                    "flair": flair_path,
+                    "flair": flair_paths,
                     "bold_naming40": bold_naming40,  # List of paths (naming40 task)
                     "bold_rest": bold_rest,  # List of paths (rest task)
                     "dwi": dwi_paths,  # List of paths (all runs)
@@ -327,16 +330,16 @@ def get_arc_features() -> Features:
     Schema:
         - subject_id: BIDS identifier (e.g., "sub-M2001")
         - session_id: BIDS session identifier (e.g., "ses-1")
-        - t1w: T1-weighted structural MRI (Nifti, single file)
-        - t2w: T2-weighted structural MRI (Nifti, nullable, single file)
+        - t1w: T1-weighted structural MRI (Sequence of Nifti, multiple runs)
+        - t2w: T2-weighted structural MRI (Sequence of Nifti, multiple runs)
         - t2w_acquisition: T2w acquisition type (space_2x, space_no_accel, turbo_spin_echo)
-        - flair: FLAIR structural MRI (Nifti, nullable, single file)
+        - flair: FLAIR structural MRI (Sequence of Nifti, multiple runs)
         - bold_naming40: BOLD fMRI for naming40 task (Sequence of Nifti)
         - bold_rest: BOLD fMRI for resting state (Sequence of Nifti)
-        - dwi: Diffusion-weighted imaging (Sequence of Nifti, supports multiple runs)
+        - dwi: Diffusion-weighted imaging (Sequence of Nifti, multiple runs)
         - dwi_bvals: DWI b-values (Sequence of string, aligned with dwi)
         - dwi_bvecs: DWI gradient directions (Sequence of string, aligned with dwi)
-        - sbref: Single-band reference images (Sequence of Nifti, supports multiple runs)
+        - sbref: Single-band reference images (Sequence of Nifti, multiple runs)
         - lesion: Expert-drawn lesion mask (Nifti, single file)
         - age_at_stroke: Age at time of stroke (float)
         - sex: Biological sex (M/F)
@@ -352,11 +355,11 @@ def get_arc_features() -> Features:
         {
             "subject_id": Value("string"),
             "session_id": Value("string"),
-            # Structural: single file per session
-            "t1w": Nifti(),
-            "t2w": Nifti(),
+            # Structural: multiple runs per session
+            "t1w": Sequence(Nifti()),
+            "t2w": Sequence(Nifti()),
             "t2w_acquisition": Value("string"),
-            "flair": Nifti(),
+            "flair": Sequence(Nifti()),
             # Functional/Diffusion: multiple runs per session
             "bold_naming40": Sequence(Nifti()),
             "bold_rest": Sequence(Nifti()),

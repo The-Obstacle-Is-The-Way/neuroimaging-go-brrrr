@@ -214,10 +214,15 @@ class TestBuildArcFileTable:
         # sub-M2001 ses-1 has ALL modalities: T1w, T2w, FLAIR, bold, dwi, sbref, lesion
         ses1 = df[(df["subject_id"] == "sub-M2001") & (df["session_id"] == "ses-1")].iloc[0]
 
-        # Structural: single paths
-        assert ses1["t1w"] is not None
-        assert ses1["t2w"] is not None
-        assert ses1["flair"] is not None
+        # Structural: single paths (now lists)
+        assert isinstance(ses1["t1w"], list)
+        assert len(ses1["t1w"]) == 1
+        assert isinstance(ses1["t2w"], list)
+        assert len(ses1["t2w"]) == 1
+        assert isinstance(ses1["flair"], list)
+        assert len(ses1["flair"]) == 1
+
+        # Lesion is still single
         assert ses1["lesion"] is not None
 
         # Functional/Diffusion: lists of paths (multi-run support)
@@ -247,14 +252,16 @@ class TestBuildArcFileTable:
         assert ses1["wab_type"] == "Anomic"
 
     def test_build_file_table_session_partial_modalities(self, synthetic_bids_root: Path) -> None:
-        """Test that session with partial modalities has None for missing paths."""
+        """Test that session with partial modalities has empty list for missing modalities."""
         df = build_arc_file_table(synthetic_bids_root)
         # sub-M2001 ses-2 has only T1w and T2w (no FLAIR, no func, no dwi)
         ses2 = df[(df["subject_id"] == "sub-M2001") & (df["session_id"] == "ses-2")].iloc[0]
 
-        assert ses2["t1w"] is not None
-        assert ses2["t2w"] is not None
-        assert ses2["flair"] is None  # No FLAIR in ses-2
+        assert isinstance(ses2["t1w"], list)
+        assert len(ses2["t1w"]) == 1
+        assert isinstance(ses2["t2w"], list)
+        assert len(ses2["t2w"]) == 1
+        assert ses2["flair"] == []  # No FLAIR in ses-2 (empty list)
         assert ses2["bold_naming40"] == []  # No func/ in ses-2 (empty list)
         assert ses2["bold_rest"] == []
         assert ses2["dwi"] == []  # No dwi/ in ses-2 (empty list)
@@ -264,14 +271,15 @@ class TestBuildArcFileTable:
         assert ses2["lesion"] is not None
 
     def test_build_file_table_session_with_minimal_data(self, synthetic_bids_root: Path) -> None:
-        """Test that session with minimal data has None for missing paths."""
+        """Test that session with minimal data has empty list for missing modalities."""
         df = build_arc_file_table(synthetic_bids_root)
         # sub-M2002 ses-1 has T1w only (minimal - only structural T1w)
         sub2_ses1 = df[(df["subject_id"] == "sub-M2002") & (df["session_id"] == "ses-1")].iloc[0]
 
-        assert sub2_ses1["t1w"] is not None
-        assert sub2_ses1["t2w"] is None  # No T2w
-        assert sub2_ses1["flair"] is None  # No FLAIR
+        assert isinstance(sub2_ses1["t1w"], list)
+        assert len(sub2_ses1["t1w"]) == 1
+        assert sub2_ses1["t2w"] == []  # No T2w (empty list)
+        assert sub2_ses1["flair"] == []  # No FLAIR (empty list)
         assert sub2_ses1["bold_naming40"] == []  # No func/ (empty list)
         assert sub2_ses1["bold_rest"] == []
         assert sub2_ses1["dwi"] == []  # No dwi/ (empty list)
@@ -331,7 +339,9 @@ class TestBuildArcFileTable:
         df = build_arc_file_table(synthetic_bids_root)
         ses1 = df[(df["subject_id"] == "sub-M2001") & (df["session_id"] == "ses-1")].iloc[0]
 
-        assert Path(ses1["t1w"]).is_absolute()
+        # t1w is now a list, check first element
+        assert Path(ses1["t1w"][0]).is_absolute()
+        # lesion is still a single path
         assert Path(ses1["lesion"]).is_absolute()
 
     def test_build_file_table_missing_participants_raises(self, tmp_path: Path) -> None:
@@ -409,10 +419,10 @@ class TestGetArcFeatures:
 
         features = get_arc_features()
 
-        # Structural: single file per session
-        assert isinstance(features["t1w"], Nifti)
-        assert isinstance(features["t2w"], Nifti)
-        assert isinstance(features["flair"], Nifti)
+        # Structural: multiple runs per session (Sequence of Nifti)
+        assert isinstance(features["t1w"], Sequence)
+        assert isinstance(features["t2w"], Sequence)
+        assert isinstance(features["flair"], Sequence)
         # Functional/Diffusion: multiple runs per session (Sequence of Nifti)
         assert isinstance(features["bold_naming40"], Sequence)
         assert isinstance(features["bold_rest"], Sequence)
@@ -559,22 +569,30 @@ class TestBuildArcFileTableAcquisition:
         sub2 = df[(df["subject_id"] == "sub-M2002") & (df["session_id"] == "ses-1")].iloc[0]
         assert sub2["t2w_acquisition"] is None
 
-    def test_multi_t2w_session_sets_t2w_none(self, synthetic_bids_root: Path) -> None:
-        """Verify sessions with multiple T2w files are treated as ambiguous (t2w=None).
+    def test_multi_t2w_session_includes_all_files(self, synthetic_bids_root: Path) -> None:
+        """Verify sessions with multiple T2w files include all files.
 
-        When a session contains multiple T2w files, find_single_nifti returns None
-        to avoid ambiguity. Consequently, t2w_acquisition should also be None.
+        When a session contains multiple T2w files, we should collect all of them
+        and use the first one to determine the acquisition type.
         """
-        # Add a second T2w to an existing session to force ambiguity
+        # Add a second T2w to an existing session
         anat_dir = synthetic_bids_root / "sub-M2001" / "ses-1" / "anat"
         _create_minimal_nifti(anat_dir / "sub-M2001_ses-1_acq-spc3_T2w.nii.gz")
 
         df = build_arc_file_table(synthetic_bids_root)
         ses1 = df[(df["subject_id"] == "sub-M2001") & (df["session_id"] == "ses-1")].iloc[0]
 
-        # With two T2w files, both t2w and t2w_acquisition should be None
-        assert ses1["t2w"] is None
-        assert ses1["t2w_acquisition"] is None
+        # Should have 2 T2w files (original spc3p2 + new spc3)
+        assert isinstance(ses1["t2w"], list)
+        assert len(ses1["t2w"]) == 2
+
+        # Verify acquisition type is set (uses first file found)
+        # Note: file order from find_all_niftis is sorted by name
+        # original: ...acq-spc3p2...
+        # new: ...acq-spc3...
+        # Depending on sort order, one will be first.
+        assert ses1["t2w_acquisition"] is not None
+        assert ses1["t2w_acquisition"] in ["space_2x", "space_no_accel"]
 
 
 class TestGetArcFeaturesAcquisition:

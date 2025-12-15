@@ -71,7 +71,7 @@ def _check_lesion_masks(bids_root: Path) -> ValidationCheck:
 #
 # | Modality | Paper Claims | Raw Files (SSOT) | Sessions w/ Modality |
 # |----------|--------------|------------------|----------------------|
-# | T1w      | 447          | 444              | 444 (1:1 mapping)    |
+# | T1w      | 447          | 447              | 444 (3 sessions have 2)|
 # | T2w      | 447          | 441              | 440 (1 session has 2)|
 # | FLAIR    | 235          | 235              | 233 (2 sessions have 2)|
 # | BOLD     | 1,402        | 1,402            | 850 (multiple runs)  |
@@ -203,11 +203,16 @@ ARC_HF_EXPECTED_SCHEMA = [
 ARC_HF_EXPECTED_COUNTS = {
     "rows": 902,  # Total sessions
     "subjects": 230,  # Unique subjects
-    # Non-null counts for singleton modalities (after multi-run → None filtering)
-    "t1w_non_null": 441,
-    "t2w_non_null": 439,
-    "flair_non_null": 231,
+    # Singleton modality non-null counts
     "lesion_non_null": 228,
+    # Structural modalities (now lists) - Sessions with at least one file
+    "t1w_sessions": 444,
+    "t2w_sessions": 440,
+    "flair_sessions": 233,
+    # Structural modalities - Total files across all sessions
+    "t1w_files": 447,
+    "t2w_files": 441,
+    "flair_files": 235,
     # Sessions with at least one run (list length > 0)
     "bold_naming40_sessions": 750,
     "bold_rest_sessions": 498,
@@ -238,12 +243,13 @@ def _check_nifti_loadable(ds: Dataset, sample_size: int = 5) -> HFValidationChec
         row = ds_view[idx]
         row_id = f"{row['subject_id']}/{row['session_id']}"
         try:
-            # Check T1w if present
-            if row["t1w"] is not None:
-                shape = row["t1w"].shape
-                if len(shape) != 3:
-                    errors.append(f"Row {idx} ({row_id}) t1w: unexpected shape {shape}")
-                checked += 1
+            # Check T1w if present (now a list)
+            if row["t1w"]:
+                for i, img in enumerate(row["t1w"]):
+                    shape = img.shape
+                    if len(shape) != 3:
+                        errors.append(f"Row {idx} ({row_id}) t1w[{i}]: unexpected shape {shape}")
+                    checked += 1
 
             # Check first BOLD run if present
             if row["bold_naming40"] and len(row["bold_naming40"]) > 0:
@@ -305,15 +311,15 @@ def validate_arc_hf(
 
     # Singleton modality non-null counts
     for col, key in [
-        ("t1w", "t1w_non_null"),
-        ("t2w", "t2w_non_null"),
-        ("flair", "flair_non_null"),
         ("lesion", "lesion_non_null"),
     ]:
         result.add(check_non_null_count(ds, col, ARC_HF_EXPECTED_COUNTS[key]))
 
     # List modality session counts
     for col, key in [
+        ("t1w", "t1w_sessions"),
+        ("t2w", "t2w_sessions"),
+        ("flair", "flair_sessions"),
         ("bold_naming40", "bold_naming40_sessions"),
         ("bold_rest", "bold_rest_sessions"),
         ("dwi", "dwi_sessions"),
@@ -323,6 +329,9 @@ def validate_arc_hf(
 
     # Total run counts
     for col, key in [
+        ("t1w", "t1w_files"),
+        ("t2w", "t2w_files"),
+        ("flair", "flair_files"),
         ("bold_naming40", "bold_naming40_runs"),
         ("bold_rest", "bold_rest_runs"),
         ("dwi", "dwi_runs"),

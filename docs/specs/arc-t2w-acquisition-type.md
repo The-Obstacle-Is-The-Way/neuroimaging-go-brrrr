@@ -54,11 +54,11 @@ The ARC dataset uploaded to HuggingFace is missing the `t2w_acquisition` field. 
 - `derivatives/lesion_masks/sub-M2001/ses-1253/anat/sub-M2001_ses-1253_acq-spc3_run-3_T2w_desc-lesion_mask.nii.gz`
 - `derivatives/lesion_masks/sub-M2002/ses-1441/anat/sub-M2002_ses-1441_acq-tse3_run-4_T2w_desc-lesion_mask.nii.gz`
 
-#### Edge Case: Multiple T2w Files Per Session
+#### Multi-Run Sessions (Fixed in v4)
 
-`sub-M2105/ses-964` has **two** T2w files but only **one** lesion mask. Current `find_single_nifti()` returns `None` when multiple matches exist, causing this session to have `t2w=None` and thus `t2w_acquisition=None`.
+Some sessions have multiple T2w files (e.g., `sub-M2105/ses-964` has 2). As of v4, structural modalities use `Sequence(Nifti())` so all files are preserved. The `t2w_acquisition` is derived from the first file (all runs in a session use the same sequence).
 
-**Decision:** Accept this edge case. The session still gets a lesion mask row, just with missing T2w/acquisition. Downstream filtering handles this correctly.
+See `docs/specs/arc-structural-multi-run-fix.md` for full multi-run schema specification.
 
 ---
 
@@ -411,7 +411,7 @@ print(len(ds["train"]))  # 902
 paper_subset = ds["train"].filter(
     lambda x: (
         x["lesion"] is not None
-        and x["t2w"] is not None
+        and len(x["t2w"]) > 0  # v4: t2w is now a list
         and x["t2w_acquisition"] in ("space_2x", "space_no_accel")
     )
 )
@@ -426,7 +426,6 @@ print(df["t2w_acquisition"].value_counts())
 # space_2x           115
 # space_no_accel     108
 # turbo_spin_echo      5
-# (possibly 1-2 NaN for multi-T2w edge cases)
 ```
 
 ---

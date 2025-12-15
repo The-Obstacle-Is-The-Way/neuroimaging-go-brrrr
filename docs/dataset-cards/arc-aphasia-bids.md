@@ -31,16 +31,16 @@ The Aphasia Recovery Cohort (ARC) is a large-scale, longitudinal neuroimaging da
 |--------|-------|
 | Subjects | 230 |
 | Sessions | 902 |
-| T1-weighted scans | 441 sessions* |
-| T2-weighted scans | 439 sessions* |
-| FLAIR scans | 231 sessions* |
+| T1-weighted scans | 444 sessions (447 runs)* |
+| T2-weighted scans | 440 sessions (441 runs)* |
+| FLAIR scans | 233 sessions (235 runs)* |
 | BOLD fMRI (naming40 task) | 750 sessions (894 runs) |
 | BOLD fMRI (resting state) | 498 sessions (508 runs) |
 | Diffusion (DWI) | 613 sessions (2,089 runs) |
 | Single-band reference | 88 sessions (322 runs) |
 | Expert lesion masks | 228 |
 
-*Sessions with exactly one scan. Sessions with multiple runs of the same structural modality are set to `None` to avoid ambiguity (3 T1w, 1 T2w, 2 FLAIR sessions affected).
+*Sessions with multiple runs of the same structural modality now include all runs as a list.
 
 - **Source:** [OpenNeuro ds004884](https://openneuro.org/datasets/ds004884)
 - **Paper:** [Gibson et al., Scientific Data 2024](https://doi.org/10.1038/s41597-024-03819-7)
@@ -69,10 +69,10 @@ Each row represents a single scanning session (subject + timepoint):
 {
     "subject_id": "sub-M2001",
     "session_id": "ses-1",
-    "t1w": <nibabel.Nifti1Image>,              # T1-weighted structural
-    "t2w": <nibabel.Nifti1Image>,              # T2-weighted structural
+    "t1w": [<nibabel.Nifti1Image>, ...],       # T1-weighted structural (list of runs)
+    "t2w": [<nibabel.Nifti1Image>, ...],       # T2-weighted structural (list of runs)
     "t2w_acquisition": "space_2x",             # T2w sequence type
-    "flair": <nibabel.Nifti1Image>,            # FLAIR structural
+    "flair": [<nibabel.Nifti1Image>, ...],     # FLAIR structural (list of runs)
     "bold_naming40": [<Nifti1Image>, ...],     # Naming task fMRI runs
     "bold_rest": [<Nifti1Image>, ...],         # Resting state fMRI runs
     "dwi": [<Nifti1Image>, ...],               # Diffusion runs
@@ -95,10 +95,10 @@ Each row represents a single scanning session (subject + timepoint):
 |-------|------|-------------|
 | `subject_id` | string | BIDS subject identifier (e.g., "sub-M2001") |
 | `session_id` | string | BIDS session identifier (e.g., "ses-1") |
-| `t1w` | Nifti | T1-weighted structural MRI (nullable) |
-| `t2w` | Nifti | T2-weighted structural MRI (nullable) |
+| `t1w` | Sequence[Nifti] | T1-weighted structural MRI runs |
+| `t2w` | Sequence[Nifti] | T2-weighted structural MRI runs |
 | `t2w_acquisition` | string | T2w acquisition type: `space_2x`, `space_no_accel`, `turbo_spin_echo` (nullable) |
-| `flair` | Nifti | FLAIR structural MRI (nullable) |
+| `flair` | Sequence[Nifti] | FLAIR structural MRI runs |
 | `bold_naming40` | Sequence[Nifti] | BOLD fMRI runs for naming40 task |
 | `bold_rest` | Sequence[Nifti] | BOLD fMRI runs for resting state |
 | `dwi` | Sequence[Nifti] | Diffusion-weighted imaging runs |
@@ -174,7 +174,7 @@ ds = load_dataset("hugging-science/arc-aphasia-bids", split="train")
 # Access a session
 session = ds[0]
 print(session["subject_id"])  # "sub-M2001"
-print(session["t1w"])         # nibabel.Nifti1Image
+print(session["t1w"][0])      # nibabel.Nifti1Image
 print(session["wab_aq"])      # Aphasia severity score
 
 # Access BOLD by task type
@@ -196,11 +196,11 @@ for i, (dwi_run, bval, bvec) in enumerate(zip(
 space_only = ds.filter(
     lambda x: (
         x["lesion"] is not None
-        and x["t2w"] is not None
+        and len(x["t2w"]) > 0
         and x["t2w_acquisition"] in ("space_2x", "space_no_accel")
     )
 )
-# Returns 222 SPACE samples (115 space_2x + 107 space_no_accel)
+# Returns 223 SPACE samples (115 space_2x + 108 space_no_accel)
 
 # Clinical metadata analysis
 import pandas as pd
@@ -276,6 +276,17 @@ This dataset is released under **CC0 1.0 Universal (Public Domain)**. You can co
 Thanks to [@The-Obstacle-Is-The-Way](https://github.com/The-Obstacle-Is-The-Way) for converting this dataset to HuggingFace format with native `Nifti()` feature support.
 
 ## Changelog
+
+### v4 (December 2025)
+
+- **BREAKING:** `t1w`, `t2w`, `flair` changed from `Nifti()` to `Sequence(Nifti())` for full data fidelity
+- **FIX:** 6 sessions with multiple structural runs now include all files (previously set to `None`)
+- **NOTE:** Most sessions have exactly 1 structural scan; access via `session["t2w"][0]`
+
+### v3 (December 2025)
+
+- **RETRACTED:** Attempted fix for 222 → 223 SPACE samples was incorrect diagnosis
+- **NOTE:** The missing sample is caused by a schema design flaw (see v4 fix above), not upload issues
 
 ### v2 (December 2025)
 
