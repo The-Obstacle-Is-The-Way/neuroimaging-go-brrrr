@@ -69,4 +69,3 @@ def apply_nifti_lazy_loading_patch() -> bool:
     wrapper_class.__init__ = _lazy_init
     setattr(ds_nifti, _PATCH_SENTINEL_ATTR, True)
     return True
-

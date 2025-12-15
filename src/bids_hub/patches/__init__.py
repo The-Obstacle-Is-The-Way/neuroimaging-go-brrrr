@@ -9,4 +9,3 @@ from __future__ import annotations
 from .nifti_lazy import apply_nifti_lazy_loading_patch
 
 __all__ = ["apply_nifti_lazy_loading_patch"]
-

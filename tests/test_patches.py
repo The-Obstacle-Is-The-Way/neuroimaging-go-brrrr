@@ -81,4 +81,3 @@ def test_get_fdata_still_materializes_after_patch(nifti_file: Path) -> None:
 
     assert isinstance(data, np.ndarray)
     assert data.shape == (2, 3, 4)
-
