@@ -252,7 +252,7 @@ class TestBuildArcFileTable:
         assert ses1["wab_type"] == "Anomic"
 
     def test_build_file_table_session_partial_modalities(self, synthetic_bids_root: Path) -> None:
-        """Test that session with partial modalities has None for missing paths."""
+        """Test that session with partial modalities has empty list for missing modalities."""
         df = build_arc_file_table(synthetic_bids_root)
         # sub-M2001 ses-2 has only T1w and T2w (no FLAIR, no func, no dwi)
         ses2 = df[(df["subject_id"] == "sub-M2001") & (df["session_id"] == "ses-2")].iloc[0]
@@ -271,7 +271,7 @@ class TestBuildArcFileTable:
         assert ses2["lesion"] is not None
 
     def test_build_file_table_session_with_minimal_data(self, synthetic_bids_root: Path) -> None:
-        """Test that session with minimal data has None for missing paths."""
+        """Test that session with minimal data has empty list for missing modalities."""
         df = build_arc_file_table(synthetic_bids_root)
         # sub-M2002 ses-1 has T1w only (minimal - only structural T1w)
         sub2_ses1 = df[(df["subject_id"] == "sub-M2002") & (df["session_id"] == "ses-1")].iloc[0]

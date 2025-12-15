@@ -19,6 +19,7 @@ From `data/openneuro/ds004884/` (excluding derivatives):
 - **FLAIR:** 235 files across 233 sessions (2 sessions have 2 files)
 
 **Multi-run sessions:**
+
 | Modality | Session | Files |
 |----------|---------|-------|
 | T1w | sub-M2078/ses-3622 | 2 |
@@ -121,7 +122,7 @@ for t1w_path in row["t1w"]:
 
 **Also update:** `ARC_HF_EXPECTED_COUNTS` dict - change validation strategy:
 - OLD: `"t1w_non_null": 441` (count of sessions where t1w is not None)
-- NEW: `"t1w_sessions_with_data": 444, "t1w_total_files": 447`
+- NEW: `"t1w_sessions": 444, "t1w_files": 447`
 
 ### 6. Update Tests (`tests/test_arc.py`)
 

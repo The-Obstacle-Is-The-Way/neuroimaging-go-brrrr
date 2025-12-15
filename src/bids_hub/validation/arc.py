@@ -71,7 +71,7 @@ def _check_lesion_masks(bids_root: Path) -> ValidationCheck:
 #
 # | Modality | Paper Claims | Raw Files (SSOT) | Sessions w/ Modality |
 # |----------|--------------|------------------|----------------------|
-# | T1w      | 447          | 444              | 444 (1:1 mapping)    |
+# | T1w      | 447          | 447              | 444 (3 sessions have 2)|
 # | T2w      | 447          | 441              | 440 (1 session has 2)|
 # | FLAIR    | 235          | 235              | 233 (2 sessions have 2)|
 # | BOLD     | 1,402        | 1,402            | 850 (multiple runs)  |

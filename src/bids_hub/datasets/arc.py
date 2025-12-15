@@ -138,10 +138,10 @@ def build_arc_file_table(bids_root: Path) -> pd.DataFrame:
         DataFrame with columns:
             - subject_id (str): BIDS subject identifier (e.g., "sub-M2001")
             - session_id (str): BIDS session identifier (e.g., "ses-1")
-            - t1w (str | None): Absolute path to T1-weighted NIfTI
-            - t2w (str | None): Absolute path to T2-weighted NIfTI
+            - t1w (list[str]): Absolute paths to T1-weighted NIfTIs (empty if none)
+            - t2w (list[str]): Absolute paths to T2-weighted NIfTIs (empty if none)
             - t2w_acquisition (str | None): Acquisition type for T2w (e.g., "space_2x")
-            - flair (str | None): Absolute path to FLAIR NIfTI
+            - flair (list[str]): Absolute paths to FLAIR NIfTIs (empty if none)
             - bold_naming40 (list[str]): Paths to BOLD runs for picture naming task
             - bold_rest (list[str]): Paths to BOLD runs for resting state
             - dwi (list[str]): List of absolute paths to ALL DWI runs

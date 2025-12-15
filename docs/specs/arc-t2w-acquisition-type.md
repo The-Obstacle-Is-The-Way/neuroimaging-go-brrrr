@@ -58,6 +58,8 @@ The ARC dataset uploaded to HuggingFace is missing the `t2w_acquisition` field. 
 
 Some sessions have multiple T2w files (e.g., `sub-M2105/ses-964` has 2). As of v4, structural modalities use `Sequence(Nifti())` so all files are preserved. The `t2w_acquisition` is derived from the first file (all runs in a session use the same sequence).
 
+See `docs/specs/arc-structural-multi-run-fix.md` for full multi-run schema specification.
+
 ---
 
 ### Current Pipeline Gap
