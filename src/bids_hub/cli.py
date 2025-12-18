@@ -436,7 +436,7 @@ def validate_aomic_piop1(
     Checks:
     - Required BIDS files exist (dataset_description.json, participants.tsv)
     - Subject count matches expected (216 from Sci Data paper)
-    - Modality counts match expected (T1w: 216, DWI: 216, BOLD: 216)
+    - Modality counts match expected (T1w: 216, DWI: 211, BOLD: 216)
     - Sample NIfTI files are loadable with nibabel
     - (Optional) External BIDS validator passes
 
@@ -479,7 +479,7 @@ def info_aomic_piop1() -> None:
     typer.echo("Expected counts (from Sci Data paper):")
     typer.echo("  - Subjects: 216")
     typer.echo("  - T1w: 216")
-    typer.echo("  - DWI: 216")
+    typer.echo("  - DWI: 211 (5 subjects missing)")
     typer.echo("  - BOLD: 216")
 
 

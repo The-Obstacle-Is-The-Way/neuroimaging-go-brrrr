@@ -93,9 +93,9 @@ def build_aomic_piop1_file_table(bids_root: Path) -> pd.DataFrame:
         anat_dir = subject_dir / "anat"
         t1w_path = find_single_nifti(anat_dir, f"{subject_id}_T1w.nii.gz")
 
-        # Find DWI (multiple runs possible)
+        # Find DWI (single file per subject in AOMIC-PIOP1)
         dwi_dir = subject_dir / "dwi"
-        dwi_paths = find_all_niftis(dwi_dir, f"{subject_id}_*_dwi.nii.gz")
+        dwi_paths = find_all_niftis(dwi_dir, f"{subject_id}_dwi.nii.gz")
 
         # Find BOLD (all fMRI runs: resting-state + tasks)
         func_dir = subject_dir / "func"

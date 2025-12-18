@@ -41,8 +41,7 @@ def synthetic_aomic_piop1_bids_root() -> Generator[Path, None, None]:
         │   ├── anat/
         │   │   └── sub-0001_T1w.nii.gz
         │   ├── dwi/
-        │   │   ├── sub-0001_run-1_dwi.nii.gz
-        │   │   └── sub-0001_run-2_dwi.nii.gz
+        │   │   └── sub-0001_dwi.nii.gz
         │   └── func/
         │       ├── sub-0001_task-restingstate_bold.nii.gz
         │       └── sub-0001_task-stopsignal_bold.nii.gz
@@ -68,9 +67,8 @@ def synthetic_aomic_piop1_bids_root() -> Generator[Path, None, None]:
 
         # sub-0001: FULL modalities (anat + dwi + func) with MULTIPLE RUNS
         _create_minimal_nifti(root / "sub-0001" / "anat" / "sub-0001_T1w.nii.gz")
-        # Multiple DWI runs
-        _create_minimal_nifti(root / "sub-0001" / "dwi" / "sub-0001_run-1_dwi.nii.gz")
-        _create_minimal_nifti(root / "sub-0001" / "dwi" / "sub-0001_run-2_dwi.nii.gz")
+        # Single DWI file (AOMIC-PIOP1 pattern)
+        _create_minimal_nifti(root / "sub-0001" / "dwi" / "sub-0001_dwi.nii.gz")
         # Multiple BOLD tasks
         _create_minimal_nifti(root / "sub-0001" / "func" / "sub-0001_task-restingstate_bold.nii.gz")
         _create_minimal_nifti(root / "sub-0001" / "func" / "sub-0001_task-stopsignal_bold.nii.gz")
@@ -129,9 +127,9 @@ class TestBuildAomicPiop1FileTable:
         assert sub1["t1w"] is not None
         assert isinstance(sub1["t1w"], str)
 
-        # Diffusion: list of paths (multi-run support)
+        # Diffusion: list of paths (single file in AOMIC-PIOP1)
         assert isinstance(sub1["dwi"], list)
-        assert len(sub1["dwi"]) == 2  # 2 DWI runs
+        assert len(sub1["dwi"]) == 1  # 1 DWI file
 
         # BOLD: list of paths (multi-task support)
         assert isinstance(sub1["bold"], list)
@@ -163,7 +161,7 @@ class TestBuildAomicPiop1FileTable:
         sub1 = df[df["subject_id"] == "sub-0001"].iloc[0]
 
         assert isinstance(sub1["dwi"], list)
-        assert len(sub1["dwi"]) == 2
+        assert len(sub1["dwi"]) == 1
         # All should be strings
         assert all(isinstance(p, str) for p in sub1["dwi"])
 

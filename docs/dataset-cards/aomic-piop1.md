@@ -33,10 +33,10 @@ Amsterdam Open MRI Collection - Population Imaging of Psychology Dataset 1 (PIOP
 | Modality | Count | Description |
 |----------|-------|-------------|
 | T1w | 216 | T1-weighted structural MRI |
-| DWI | 216 | Diffusion-weighted imaging (multiple runs) |
+| DWI | 211 | Diffusion-weighted imaging |
 | BOLD | 216 | Functional MRI (resting-state + tasks) |
 
-**Note:** All 216 subjects have complete multimodal data (T1w, DWI, and BOLD scans).
+**Note:** 211/216 subjects have DWI data. All 216 subjects have T1w and BOLD scans. Five subjects missing DWI: sub-0041, sub-0057, sub-0121, sub-0183, sub-0192.
 
 ## Usage
 
@@ -61,7 +61,7 @@ print(example["handedness"])   # Handedness (L/R)
 ```bibtex
 @article{snoek2021amsterdam,
   title={The Amsterdam Open MRI Collection, a set of multimodal MRI datasets for individual difference analyses},
-  author={Snoek, Lukas and van der Miesen, Maite M and Beemsterboer, Thijs and Van Der Leij, Andries and Eigenhuis, Annemarie and Steven Scholte, H},
+  author={Snoek, Lukas and van der Miesen, Maite M and Beemsterboer, Tinka and Van Der Leij, Andries and Eigenhuis, Annemarie and Scholte, H Steven},
   journal={Scientific Data},
   volume={8},
   number={1},

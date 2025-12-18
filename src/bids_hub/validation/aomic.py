@@ -26,7 +26,7 @@ AOMIC_PIOP1_VALIDATION_CONFIG = DatasetValidationConfig(
     expected_counts={
         "subjects": 216,
         "t1w": 216,  # All subjects have T1w
-        "dwi": 216,  # All subjects have DWI
+        "dwi": 211,  # 5 subjects missing DWI data
         "bold": 216,  # All subjects have BOLD (rest + tasks)
     },
     required_files=[
