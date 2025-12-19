@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Purpose
 
-This package uploads BIDS neuroimaging datasets (ARC, ISLES24) to HuggingFace Hub. It converts BIDS-formatted NIfTI files to HuggingFace's `Dataset` format with proper `Nifti()` feature types.
+This package uploads BIDS neuroimaging datasets (ARC, AOMIC-PIOP1, ISLES24) to HuggingFace Hub. It converts BIDS-formatted NIfTI files to HuggingFace's `Dataset` format with proper `Nifti()` feature types.
 
 ## Commands
 
@@ -39,6 +39,12 @@ uv run bids-hub isles24 validate data/zenodo/isles24/train
 uv run bids-hub isles24 build data/zenodo/isles24/train --dry-run
 uv run bids-hub isles24 build data/zenodo/isles24/train --no-dry-run
 uv run bids-hub isles24 info
+
+# AOMIC-PIOP1 commands
+uv run bids-hub aomic piop1 validate data/openneuro/ds002785
+uv run bids-hub aomic piop1 build data/openneuro/ds002785 --dry-run
+uv run bids-hub aomic piop1 build data/openneuro/ds002785 --no-dry-run
+uv run bids-hub aomic piop1 info
 ```
 
 ## Architecture
@@ -65,9 +71,11 @@ HuggingFace Hub
 | `core/builder.py` | Generic BIDS→HF conversion (build_hf_dataset, push_dataset_to_hub) |
 | `core/config.py` | DatasetBuilderConfig dataclass |
 | `core/utils.py` | File discovery helpers (find_single_nifti, find_all_niftis) |
+| `datasets/aomic_piop1.py` | AOMIC-PIOP1 schema, file discovery, pipeline |
 | `datasets/arc.py` | ARC schema, file discovery, pipeline |
 | `datasets/isles24.py` | ISLES24 schema, file discovery, pipeline |
 | `validation/base.py` | Generic validation framework |
+| `validation/aomic.py` | AOMIC validation rules |
 | `validation/arc.py` | ARC validation rules |
 | `validation/isles24.py` | ISLES24 validation rules |
 | `cli.py` | Typer CLI with subcommands |
@@ -130,9 +138,23 @@ Features({
 })
 ```
 
+### AOMIC-PIOP1 Schema (one row per SUBJECT, flattened)
+
+```python
+Features({
+    "subject_id": Value("string"),    # e.g., "sub-0001"
+    "t1w": Nifti(),                   # T1-weighted structural (single)
+    "dwi": Sequence(Nifti()),         # Diffusion-weighted (multiple runs)
+    "bold": Sequence(Nifti()),        # fMRI time-series (all tasks)
+    "age": Value("float32"),
+    "sex": Value("string"),
+    "handedness": Value("string"),
+})
+```
+
 ## Testing
 
-Tests use synthetic BIDS structures with minimal NIfTI files (2x2x2 voxels). The fixtures `synthetic_bids_root` (ARC) and `synthetic_isles24_root` (ISLES24) create complete datasets with all modalities for comprehensive coverage.
+Tests use synthetic BIDS structures with minimal NIfTI files (2x2x2 voxels). The fixtures `synthetic_bids_root` (ARC), `synthetic_aomic_piop1_bids_root` (AOMIC-PIOP1), and `synthetic_isles24_root` (ISLES24) create complete datasets with all modalities for comprehensive coverage.
 
 Key test patterns:
 - `_create_minimal_nifti()`: Creates valid NIfTI files quickly

@@ -11,6 +11,7 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 .coverage
+coverage.xml
 htmlcov/
 
 # Logs
@@ -40,3 +41,7 @@ ds*/
 # Created by push_dataset_to_hub() for bulk upload with upload_large_folder()
 # Persists to allow resume after crashes - cleaned up after successful upload
 hf_upload_staging/
+
+# Claude Code infrastructure (local configuration)
+.claude/
+dev/

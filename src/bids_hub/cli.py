@@ -26,9 +26,11 @@ from pathlib import Path
 import typer
 
 from .core import DatasetBuilderConfig
+from .datasets.aomic_piop1 import build_and_push_aomic_piop1
 from .datasets.arc import build_and_push_arc
 from .datasets.isles24 import build_and_push_isles24
 from .validation import (
+    validate_aomic_piop1_download,
     validate_arc_download,
     validate_arc_hf_from_hub,
     validate_isles24_download,
@@ -52,14 +54,27 @@ app.add_typer(arc_app, name="arc")
 isles_app = typer.Typer(help="Commands for the ISLES'24 dataset.")
 app.add_typer(isles_app, name="isles24")
 
+# --- AOMIC Subcommand Group ---
+aomic_app = typer.Typer(
+    help="AOMIC (Amsterdam Open MRI Collection) dataset commands.\n\n"
+    "Source: OpenNeuro\n"
+    "License: CC0 (Public Domain)"
+)
+app.add_typer(aomic_app, name="aomic")
+
+# --- AOMIC-PIOP1 Sub-subcommand ---
+piop1_app = typer.Typer(help="AOMIC-PIOP1 dataset (ds002785, 216 subjects).")
+aomic_app.add_typer(piop1_app, name="piop1")
+
 
 # --- Global Commands ---
 @app.command("list")
 def list_datasets() -> None:
     """List all supported datasets."""
     typer.echo("Supported datasets:")
-    typer.echo("  arc     - Aphasia Recovery Cohort (OpenNeuro ds004884)")
-    typer.echo("  isles24 - ISLES 2024 Stroke (Zenodo)")
+    typer.echo("  arc         - Aphasia Recovery Cohort (OpenNeuro ds004884)")
+    typer.echo("  isles24     - ISLES 2024 Stroke (Zenodo)")
+    typer.echo("  aomic piop1 - AOMIC-PIOP1 (OpenNeuro ds002785)")
 
 
 # --- ARC Commands ---
@@ -346,6 +361,126 @@ def info_isles() -> None:
     typer.echo("  - Acute: NCCT, CTA, CTP")
     typer.echo("  - Follow-up: DWI, ADC")
     typer.echo("  - Lesion Segmentation Masks")
+
+
+# --- AOMIC-PIOP1 Commands ---
+@piop1_app.command("build")
+def build_aomic_piop1(
+    bids_root: Path = typer.Argument(
+        ...,
+        help="Path to AOMIC-PIOP1 BIDS root directory (ds002785).",
+        exists=False,
+    ),
+    hf_repo: str = typer.Option(
+        "hugging-science/aomic-piop1",
+        "--hf-repo",
+        "-r",
+        help="HuggingFace dataset repo ID.",
+    ),
+    dry_run: bool = typer.Option(
+        True,
+        "--dry-run/--no-dry-run",
+        help="If true (default), build dataset but do not push to Hub.",
+    ),
+) -> None:
+    """
+    Build (and optionally push) the AOMIC-PIOP1 HF dataset.
+    """
+    config = DatasetBuilderConfig(
+        bids_root=bids_root,
+        hf_repo_id=hf_repo,
+        dry_run=dry_run,
+    )
+
+    typer.echo(f"Processing AOMIC-PIOP1 dataset from: {bids_root}")
+    typer.echo(f"Target HF repo: {hf_repo}")
+    typer.echo(f"Dry run: {dry_run}")
+
+    build_and_push_aomic_piop1(config)
+
+    if dry_run:
+        typer.echo("Dry run complete. Dataset built but not pushed.")
+    else:
+        typer.echo(f"Dataset pushed to: https://huggingface.co/datasets/{hf_repo}")
+
+
+@piop1_app.command("validate")
+def validate_aomic_piop1(
+    bids_root: Path = typer.Argument(
+        ...,
+        help="Path to AOMIC-PIOP1 BIDS root directory (ds002785).",
+    ),
+    run_bids_validator: bool = typer.Option(
+        False,
+        "--bids-validator/--no-bids-validator",
+        help="Run external BIDS validator (requires npx, slow on large datasets).",
+    ),
+    sample_size: int = typer.Option(
+        10,
+        "--sample-size",
+        "-n",
+        help="Number of NIfTI files to spot-check for integrity.",
+    ),
+    tolerance: float = typer.Option(
+        0.0,
+        "--tolerance",
+        "-t",
+        min=0.0,
+        max=1.0,
+        help="Allowed fraction of missing files (0.0 to 1.0). Default 0.0 (strict).",
+    ),
+) -> None:
+    """
+    Validate an AOMIC-PIOP1 dataset download before pushing to HuggingFace.
+
+    Checks:
+    - Required BIDS files exist (dataset_description.json, participants.tsv)
+    - Subject count matches expected (216 from Sci Data paper)
+    - Modality counts match expected (T1w: 216, DWI: 211, BOLD: 216)
+    - Sample NIfTI files are loadable with nibabel
+    - (Optional) External BIDS validator passes
+
+    Run this after downloading to ensure data integrity before HF push.
+
+    Example:
+        bids-hub aomic piop1 validate data/openneuro/ds002785
+    """
+    result = validate_aomic_piop1_download(
+        bids_root,
+        run_bids_validator=run_bids_validator,
+        nifti_sample_size=sample_size,
+        tolerance=tolerance,
+    )
+
+    typer.echo(result.summary())
+
+    if not result.all_passed:
+        raise typer.Exit(code=1)
+
+
+@piop1_app.command("info")
+def info_aomic_piop1() -> None:
+    """
+    Show information about the AOMIC-PIOP1 dataset.
+    """
+    typer.echo("AOMIC-PIOP1 (Population Imaging of Psychology 1)")
+    typer.echo("=" * 40)
+    typer.echo("OpenNeuro ID: ds002785")
+    typer.echo("URL: https://openneuro.org/datasets/ds002785")
+    typer.echo("License: CC0 (Public Domain)")
+    typer.echo("")
+    typer.echo("Contains:")
+    typer.echo("  - 216 healthy adult subjects")
+    typer.echo("  - T1-weighted structural MRI")
+    typer.echo("  - Diffusion-weighted imaging (DWI)")
+    typer.echo("  - BOLD fMRI (resting-state + tasks)")
+    typer.echo("  - Demographics and psychometric data")
+    typer.echo("")
+    typer.echo("Expected counts (from Sci Data paper):")
+    typer.echo("  - Subjects: 216")
+    typer.echo("  - T1w: 216")
+    typer.echo("  - DWI: 211 (5 subjects missing)")
+    typer.echo("  - BOLD: 216")
 
 
 if __name__ == "__main__":

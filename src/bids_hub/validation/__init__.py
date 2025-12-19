@@ -5,9 +5,15 @@ Architecture (SOLID - Single Responsibility Principle):
 - hf.py: Generic HuggingFace validation framework
 - arc.py: ARC-specific validation (OpenNeuro + HuggingFace)
 - isles24.py: ISLES24-specific validation (Zenodo download)
+- aomic.py: AOMIC-specific validation (OpenNeuro)
 """
 
-# --- Generic BIDS validation (base.py) ---
+# --- AOMIC-specific validation (aomic.py) ---
+from .aomic import (
+    AOMIC_PIOP1_VALIDATION_CONFIG,
+    validate_aomic_piop1_download,
+)
+
 # --- ARC-specific validation (arc.py) ---
 from .arc import (
     ARC_HF_EXPECTED_COUNTS,
@@ -52,6 +58,8 @@ from .isles24 import (
 )
 
 __all__ = [
+    # AOMIC-specific
+    "AOMIC_PIOP1_VALIDATION_CONFIG",
     # ARC-specific
     "ARC_HF_EXPECTED_COUNTS",
     "ARC_HF_EXPECTED_SCHEMA",
@@ -78,6 +86,7 @@ __all__ = [
     "check_total_list_items",
     "check_unique_values",
     "check_zero_byte_files",
+    "validate_aomic_piop1_download",
     "validate_arc_download",
     "validate_arc_hf",
     "validate_arc_hf_from_hub",
