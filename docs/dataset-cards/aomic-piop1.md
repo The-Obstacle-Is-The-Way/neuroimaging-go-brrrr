@@ -1,7 +1,7 @@
 ---
 license: cc0-1.0
 task_categories:
-  - image-classification
+  - other
 tags:
   - medical
   - neuroimaging
@@ -14,7 +14,7 @@ tags:
   - AOMIC
   - OpenNeuro
 size_categories:
-  - 100K<n<1M
+  - n<1K
 ---
 
 # AOMIC-PIOP1 Dataset
@@ -49,11 +49,11 @@ ds = load_dataset("hugging-science/aomic-piop1", split="train")
 example = ds[0]
 print(example["subject_id"])  # "sub-0001"
 print(example["t1w"])         # NIfTI array (T1-weighted structural)
-print(example["dwi"])          # List of NIfTI arrays (multiple runs)
+print(example["dwi"])          # List of NIfTI arrays (single file per subject)
 print(example["bold"])         # List of NIfTI arrays (multiple tasks)
 print(example["age"])          # Age in years
 print(example["sex"])          # Sex (M/F)
-print(example["handedness"])   # Handedness (L/R)
+print(example["handedness"])   # Handedness (left/right/ambidextrous)
 ```
 
 ## Citation
