@@ -17,11 +17,11 @@ size_categories:
   - n<1K
 ---
 
-# AOMIC-PIOP1 Dataset (V1 - Raw BIDS)
+# AOMIC-PIOP1 Dataset
 
 Amsterdam Open MRI Collection - Population Imaging of Psychology Dataset 1 (PIOP1).
 
-> **Version Note:** This is V1 containing raw BIDS data only (~118 GB). Preprocessed derivatives (fMRIprep, FreeSurfer, etc.) are not included. See [What's Not Included](#whats-not-included-v2-planned) below.
+> **Scope:** This HuggingFace dataset is derived from OpenNeuro ds002785 and includes the raw imaging NIfTI files (T1w, DWI, BOLD) plus selected participant metadata (age, sex, handedness). It does not include the original BIDS layout, sidecar files, or derivatives.
 
 ## Dataset Description
 
@@ -58,26 +58,12 @@ print(example["sex"])          # Sex (M/F)
 print(example["handedness"])   # Handedness (left/right/ambidextrous)
 ```
 
-## What's Not Included (V2 Planned)
+## What's Not Included
 
-**V1 (current)** contains raw BIDS data only (~118 GB):
-- T1-weighted structural (raw)
-- Diffusion-weighted imaging (raw)
-- BOLD fMRI (raw, all tasks)
-- Demographics (age, sex, handedness)
+- Full BIDS sidecars and auxiliary files (e.g., `events.tsv`, `*_physio.tsv.gz`, JSON sidecars, `bvec`/`bval`, full `participants.tsv`/`participants.json`).
+- OpenNeuro derivatives in `derivatives/` (e.g., `fmriprep`, `freesurfer`, `fs_stats`, `dwipreproc`, `mriqc`, `vbm`, `physiology`).
 
-**V2 (planned)** will add preprocessed derivatives (~540 GB additional):
-
-| Derivative | Description | Size |
-|------------|-------------|------|
-| fMRIprep | Preprocessed fMRI (motion corrected, normalized) | ~large |
-| FreeSurfer | Cortical surface reconstructions, parcellations | ~large |
-| dwipreproc | Preprocessed diffusion data | ~medium |
-| MRIQC | Image quality control metrics | ~small |
-| VBM | Voxel-based morphometry outputs | ~medium |
-| Physiology | Physiological recordings (breathing, heart rate) | ~small |
-
-The full OpenNeuro source (ds002785) is ~657 GB total. Most ML/DL research uses preprocessed derivatives, which require ~6-12 hours of compute per subject to generate from raw data.
+For the complete raw BIDS release and all derivatives, download from OpenNeuro ds002785.
 
 ## Citation
 
