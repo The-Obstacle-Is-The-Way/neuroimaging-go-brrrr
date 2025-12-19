@@ -153,10 +153,10 @@ class TestBuildAomicPiop1FileTable:
         assert sub2["dwi"] == []  # No dwi/ directory
         assert sub2["bold"] == []  # No func/ directory
 
-    def test_build_file_table_multiple_dwi_runs(
+    def test_build_file_table_dwi_as_list(
         self, synthetic_aomic_piop1_bids_root: Path
     ) -> None:
-        """Test that multiple DWI runs are captured as list."""
+        """Test that DWI files are captured as list (even when single file)."""
         df = build_aomic_piop1_file_table(synthetic_aomic_piop1_bids_root)
         sub1 = df[df["subject_id"] == "sub-0001"].iloc[0]
 

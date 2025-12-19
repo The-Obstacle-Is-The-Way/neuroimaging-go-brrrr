@@ -14,7 +14,7 @@ Dataset info:
 The AOMIC-PIOP1 dataset contains:
 - 216 healthy adult subjects
 - T1-weighted structural MRI scans
-- Diffusion-weighted imaging (multiple runs per subject)
+- Diffusion-weighted imaging (single file per subject; 5 subjects missing DWI)
 - BOLD fMRI scans (resting-state + multiple tasks)
 - Demographics and psychometric data (age, sex, handedness, personality scores)
 
@@ -46,7 +46,7 @@ def build_aomic_piop1_file_table(bids_root: Path) -> pd.DataFrame:
     1. Reads participants.tsv for demographics (age, sex, handedness)
     2. For each subject, finds ALL modalities:
        - T1w: Single T1-weighted structural scan
-       - DWI: Multiple diffusion-weighted runs (list)
+       - DWI: Single diffusion-weighted scan (list of 0 or 1 file)
        - BOLD: Multiple fMRI runs (resting-state + tasks, list)
     3. Returns DataFrame with columns: subject_id, t1w, dwi, bold, age, sex, handedness
 
