@@ -43,8 +43,8 @@ def synthetic_aomic_piop1_bids_root() -> Generator[Path, None, None]:
         │   ├── dwi/
         │   │   └── sub-0001_dwi.nii.gz
         │   └── func/
-        │       ├── sub-0001_task-restingstate_bold.nii.gz
-        │       └── sub-0001_task-stopsignal_bold.nii.gz
+        │       ├── sub-0001_task-restingstate_acq-mb3_bold.nii.gz
+        │       └── sub-0001_task-emomatching_acq-seq_bold.nii.gz
         ├── sub-0002/
         │   └── anat/
         │       └── sub-0002_T1w.nii.gz  (minimal - only T1w)
@@ -60,7 +60,7 @@ def synthetic_aomic_piop1_bids_root() -> Generator[Path, None, None]:
                 "participant_id": ["sub-0001", "sub-0002", "sub-0003"],
                 "age": [25.0, 30.0, 28.0],
                 "sex": ["F", "M", "F"],
-                "handedness": ["R", "R", "L"],
+                "handedness": ["right", "right", "left"],
             }
         )
         participants.to_csv(root / "participants.tsv", sep="\t", index=False)
@@ -69,9 +69,10 @@ def synthetic_aomic_piop1_bids_root() -> Generator[Path, None, None]:
         _create_minimal_nifti(root / "sub-0001" / "anat" / "sub-0001_T1w.nii.gz")
         # Single DWI file (AOMIC-PIOP1 pattern)
         _create_minimal_nifti(root / "sub-0001" / "dwi" / "sub-0001_dwi.nii.gz")
-        # Multiple BOLD tasks
-        _create_minimal_nifti(root / "sub-0001" / "func" / "sub-0001_task-restingstate_bold.nii.gz")
-        _create_minimal_nifti(root / "sub-0001" / "func" / "sub-0001_task-stopsignal_bold.nii.gz")
+        # Multiple BOLD tasks (realistic AOMIC-PIOP1 naming with acq-* entities)
+        sub1_func = root / "sub-0001" / "func"
+        _create_minimal_nifti(sub1_func / "sub-0001_task-restingstate_acq-mb3_bold.nii.gz")
+        _create_minimal_nifti(sub1_func / "sub-0001_task-emomatching_acq-seq_bold.nii.gz")
 
         # sub-0002: has T1w only (minimal)
         _create_minimal_nifti(root / "sub-0002" / "anat" / "sub-0002_T1w.nii.gz")
@@ -138,7 +139,7 @@ class TestBuildAomicPiop1FileTable:
         # Metadata
         assert sub1["age"] == 25.0
         assert sub1["sex"] == "F"
-        assert sub1["handedness"] == "R"
+        assert sub1["handedness"] == "right"
 
     def test_build_file_table_subject_partial_modalities(
         self, synthetic_aomic_piop1_bids_root: Path
@@ -153,9 +154,7 @@ class TestBuildAomicPiop1FileTable:
         assert sub2["dwi"] == []  # No dwi/ directory
         assert sub2["bold"] == []  # No func/ directory
 
-    def test_build_file_table_dwi_as_list(
-        self, synthetic_aomic_piop1_bids_root: Path
-    ) -> None:
+    def test_build_file_table_dwi_as_list(self, synthetic_aomic_piop1_bids_root: Path) -> None:
         """Test that DWI files are captured as list (even when single file)."""
         df = build_aomic_piop1_file_table(synthetic_aomic_piop1_bids_root)
         sub1 = df[df["subject_id"] == "sub-0001"].iloc[0]
@@ -206,12 +205,12 @@ class TestBuildAomicPiop1FileTable:
         # sub-0001 metadata
         assert sub1["age"] == 25.0
         assert sub1["sex"] == "F"
-        assert sub1["handedness"] == "R"
+        assert sub1["handedness"] == "right"
 
         # sub-0002 metadata
         assert sub2["age"] == 30.0
         assert sub2["sex"] == "M"
-        assert sub2["handedness"] == "R"
+        assert sub2["handedness"] == "right"
 
     def test_build_file_table_missing_participants_raises(self, tmp_path: Path) -> None:
         """Test that missing participants.tsv raises FileNotFoundError."""

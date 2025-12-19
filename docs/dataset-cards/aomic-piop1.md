@@ -1,7 +1,7 @@
 ---
 license: cc0-1.0
 task_categories:
-  - image-classification
+  - other
 tags:
   - medical
   - neuroimaging
@@ -14,12 +14,14 @@ tags:
   - AOMIC
   - OpenNeuro
 size_categories:
-  - 100K<n<1M
+  - n<1K
 ---
 
 # AOMIC-PIOP1 Dataset
 
 Amsterdam Open MRI Collection - Population Imaging of Psychology Dataset 1 (PIOP1).
+
+> **Scope:** This HuggingFace dataset is derived from OpenNeuro ds002785 and includes the raw imaging NIfTI files (T1w, DWI, BOLD) plus selected participant metadata (age, sex, handedness). It does not include the original BIDS layout, sidecar files, or derivatives.
 
 ## Dataset Description
 
@@ -49,12 +51,19 @@ ds = load_dataset("hugging-science/aomic-piop1", split="train")
 example = ds[0]
 print(example["subject_id"])  # "sub-0001"
 print(example["t1w"])         # NIfTI array (T1-weighted structural)
-print(example["dwi"])          # List of NIfTI arrays (multiple runs)
+print(example["dwi"])          # List of NIfTI arrays (single file per subject)
 print(example["bold"])         # List of NIfTI arrays (multiple tasks)
 print(example["age"])          # Age in years
 print(example["sex"])          # Sex (M/F)
-print(example["handedness"])   # Handedness (L/R)
+print(example["handedness"])   # Handedness (left/right/ambidextrous)
 ```
+
+## What's Not Included
+
+- Full BIDS sidecars and auxiliary files (e.g., `events.tsv`, `*_physio.tsv.gz`, JSON sidecars, `bvec`/`bval`, full `participants.tsv`/`participants.json`).
+- OpenNeuro derivatives in `derivatives/` (e.g., `fmriprep`, `freesurfer`, `fs_stats`, `dwipreproc`, `mriqc`, `vbm`, `physiology`).
+
+For the complete raw BIDS release and all derivatives, download from OpenNeuro ds002785.
 
 ## Citation
 
